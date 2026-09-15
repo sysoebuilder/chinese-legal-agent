@@ -39,8 +39,7 @@ def test_clients_create_structured_memories_without_streaming(client_type) -> No
                 "importance": 0.8,
                 "confidence": 0.95,
                 "temporal_type": "temporary",
-                "valid_from": None,
-                "valid_until": None,
+                "status": "active",
                 "evidence": "我目前正在学习 RAG 记忆库",
             }
         ]

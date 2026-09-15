@@ -30,6 +30,7 @@ from ai_agent_learning.planning.state import (
     PlanStatus,
     StepExecution,
 )
+from ai_agent_learning.qdrant_server import QdrantServer
 from ai_agent_learning.schema import Message, ModelRequest
 from ai_agent_learning.session import create_session_name, save_session, select_session
 from ai_agent_learning.tools.catalog import build_builtin_tools
@@ -126,20 +127,25 @@ def run_config() -> None:
 async def create_runtime() -> AsyncIterator[
     tuple[GlmModelClient | DeepSeekClient, ToolRegistry, str]
 ]:
-    """只从当前配置文件选择模型，并管理客户端连接的生命周期。"""
+    """选择当前模型，并管理客户端和本次启动的 Qdrant 服务。"""
     config = load_active_model()
     client_types = {"glm": GlmModelClient, "deepseek": DeepSeekClient}
     client = client_types[config.provider](
         api_key=config.api_key,
         base_url=config.base_url,
     )
+    server = QdrantServer()
     try:
         # .env 为搜索、邮件等工具提供凭据；模型的四个字段始终只取自 config。
         load_dotenv(source_config_path(), override=False)
+        await server.start()
         registry = ToolRegistry(tools=build_builtin_tools())
         yield client, registry, config.model
     finally:
-        await client.close()
+        try:
+            await client.close()
+        finally:
+            await server.close()
 
 
 async def run_chat() -> None:

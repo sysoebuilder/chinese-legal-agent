@@ -13,6 +13,7 @@ from ai_agent_learning.memory.schema import (
     MemoryCandidate,
     MemoryCandidateBatch,
     MemoryDecision,
+    MemoryStatus,
     StoredMemory,
     TemporalType,
 )
@@ -73,7 +74,7 @@ class MemoryService:
         return decisions
 
     async def close(self) -> None:
-        """关闭向量模型客户端和本地数据库。"""
+        """关闭向量模型客户端和数据库服务连接。"""
         try:
             if self._embedding is not None:
                 await self._embedding.close()
@@ -91,9 +92,7 @@ class MemoryService:
     async def _create_candidates(self, request: ModelRequest) -> MemoryCandidateBatch:
         """提取候选记忆，并执行格式、依据和时效类型过滤。"""
         content_messages = [
-            message
-            for message in request.messages
-            if not self._is_tool_event(message)
+            message for message in request.messages if not self._is_tool_event(message)
         ]
         content_request = ModelRequest(
             model=request.model,
@@ -109,7 +108,10 @@ class MemoryService:
         memories = [
             candidate
             for candidate in batch.memories
-            if candidate.temporal_type is not TemporalType.TEMPORARY
+            if (
+                candidate.temporal_type is not TemporalType.TEMPORARY
+                or candidate.status is not MemoryStatus.ACTIVE
+            )
             and self._has_evidence(candidate, evidence_messages)
         ]
         return MemoryCandidateBatch(memories=memories)

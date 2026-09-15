@@ -1,0 +1,14 @@
+# 从项目根目录启动：.\Qdrant\qdrant.exe --config-path .\qdrant.yaml
+# 相对存储路径以启动进程的工作目录为基准。
+storage:
+  # 原生 Qdrant 服务端数据目录，已迁入旧记忆。
+  storage_path: ./data/qdrant-server
+
+service:
+  # 仅允许本机访问。
+  host: 127.0.0.1
+  http_port: 6333
+  # 当前项目使用 HTTP 客户端，不启用 gRPC 端口。
+  grpc_port: null
+
+log_level: INFO

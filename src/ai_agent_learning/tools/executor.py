@@ -30,7 +30,7 @@ class ToolExecutor:
         self._timeout_seconds = timeout_seconds
 
         if allowed_risks is None:
-            allowed_risks = frozenset({RiskLevel.HIGH})
+            allowed_risks = frozenset({RiskLevel.HIGH, RiskLevel.LOW, RiskLevel.MEDIUM})
 
         self._allowed_risks = allowed_risks
         self._request_approval = request_approval

@@ -1,10 +1,10 @@
-"""使用 Qdrant 本地模式持久化、查询和管理长期记忆。"""
+"""使用 Qdrant 服务端持久化、查询和管理长期记忆。"""
 
 import asyncio
 import math
+import os
 from collections.abc import Sequence
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Any, Self
 from uuid import uuid4
 
@@ -17,23 +17,20 @@ from ai_agent_learning.memory.schema import (
     MemoryType,
     StoredMemory,
 )
-from ai_agent_learning.paths import get_data_dir
+from ai_agent_learning.qdrant_config import DEFAULT_QDRANT_URL
 
 DEFAULT_COLLECTION_NAME = "memories"
 DEFAULT_VECTOR_SIZE = 512
-
-
-def default_memory_database_path() -> Path:
-    """返回默认的本地 Qdrant 数据目录。"""
-    return get_data_dir() / "memory" / "qdrant"
+# 服务端允许的最低阈值（KB）；很小的候选集仍可能采用扫描。
+FULL_SCAN_THRESHOLD_KB = 10
 
 
 class QdrantMemoryStore:
-    """单用户长期记忆的本地向量存储。"""
+    """单用户长期记忆的服务端向量存储。"""
 
     def __init__(
         self,
-        path: str | Path | None = None,
+        url: str | None = None,
         *,
         collection_name: str = DEFAULT_COLLECTION_NAME,
         vector_size: int = DEFAULT_VECTOR_SIZE,
@@ -43,9 +40,10 @@ class QdrantMemoryStore:
         if not collection_name.strip():
             raise ValueError("collection_name 不能为空")
 
-        database_path = Path(path or default_memory_database_path()).resolve()
-        database_path.mkdir(parents=True, exist_ok=True)
-        self._client = AsyncQdrantClient(path=str(database_path))
+        server_url = (url or os.getenv("QDRANT_URL") or DEFAULT_QDRANT_URL).strip()
+        if not server_url:
+            raise ValueError("QDRANT_URL 不能为空")
+        self._client = AsyncQdrantClient(url=server_url, timeout=30)
         self._collection_name = collection_name
         self._vector_size = vector_size
         self._initialized = False
@@ -69,6 +67,7 @@ class QdrantMemoryStore:
                 return
             if await self._client.collection_exists(self._collection_name):
                 info = await self._client.get_collection(self._collection_name)
+                payload_schema = info.payload_schema
                 vector_config = info.config.params.vectors
                 if not isinstance(vector_config, models.VectorParams):
                     raise ValueError("记忆集合必须使用单一向量配置")
@@ -79,13 +78,51 @@ class QdrantMemoryStore:
                     )
                 if vector_config.distance != models.Distance.COSINE:
                     raise ValueError("记忆集合必须使用 Cosine 距离")
+                hnsw = info.config.hnsw_config
+                optimizer = info.config.optimizer_config
+                if (
+                    hnsw.m != 16
+                    or hnsw.ef_construct != 128
+                    or hnsw.full_scan_threshold != FULL_SCAN_THRESHOLD_KB
+                    or optimizer.indexing_threshold != 1
+                ):
+                    await self._client.update_collection(
+                        collection_name=self._collection_name,
+                        hnsw_config=models.HnswConfigDiff(
+                            m=16,
+                            ef_construct=128,
+                            full_scan_threshold=FULL_SCAN_THRESHOLD_KB,
+                        ),
+                        optimizers_config=models.OptimizersConfigDiff(
+                            indexing_threshold=1
+                        ),
+                    )
             else:
+                payload_schema = {}
                 await self._client.create_collection(
                     collection_name=self._collection_name,
                     vectors_config=models.VectorParams(
                         size=self._vector_size,
                         distance=models.Distance.COSINE,
                     ),
+                    hnsw_config=models.HnswConfigDiff(
+                        m=16,
+                        ef_construct=128,
+                        full_scan_threshold=FULL_SCAN_THRESHOLD_KB,
+                    ),
+                    optimizers_config=models.OptimizersConfigDiff(indexing_threshold=1),
+                )
+            for field_name in ("key", "status"):
+                existing = payload_schema.get(field_name)
+                if existing is not None:
+                    if existing.data_type != models.PayloadSchemaType.KEYWORD:
+                        raise ValueError(f"{field_name} 必须使用 KEYWORD payload 索引")
+                    continue
+                await self._client.create_payload_index(
+                    collection_name=self._collection_name,
+                    field_name=field_name,
+                    field_schema=models.PayloadSchemaType.KEYWORD,
+                    wait=True,
                 )
             self._initialized = True
 
@@ -158,6 +195,7 @@ class QdrantMemoryStore:
         response = await self._client.query_points(
             collection_name=self._collection_name,
             query=self._validate_vector(vector),
+            search_params=models.SearchParams(exact=False, hnsw_ef=128),
             query_filter=self._build_filter(
                 scope=scope,
                 memory_type=memory_type,
@@ -189,13 +227,15 @@ class QdrantMemoryStore:
         if limit <= 0:
             raise ValueError("limit 必须大于 0")
         await self.initialize()
-        conditions: list[models.Condition] = [
-            self._match_condition("key", key),
-            self._match_condition("status", status.value),
-        ]
+        key = key.strip()
         records, _ = await self._client.scroll(
             collection_name=self._collection_name,
-            scroll_filter=models.Filter(must=conditions),
+            scroll_filter=models.Filter(
+                must=[
+                    self._match_condition("key", key),
+                    self._match_condition("status", status.value),
+                ]
+            ),
             limit=limit,
             with_payload=True,
             with_vectors=False,

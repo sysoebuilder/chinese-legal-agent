@@ -47,4 +47,10 @@ class MemoryDecisionMaker:
         unknown_ids = set(decision.target_ids) - allowed_ids
         if unknown_ids:
             raise ValueError("记忆决定引用了未提供的旧记忆 ID")
+        if decision.action is MemoryAction.CONFIRM:
+            target = next(
+                memory for memory in old_memories if memory.id == decision.target_ids[0]
+            )
+            if target.status is not candidate.status:
+                raise ValueError("CONFIRM 不能更新记忆状态，状态变化必须使用 REPLACE")
         return decision

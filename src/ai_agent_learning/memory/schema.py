@@ -1,6 +1,6 @@
 """定义候选记忆、已存记忆和记忆决策的数据结构。"""
 
-from datetime import date, datetime
+from datetime import datetime
 from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -45,8 +45,7 @@ class MemoryCandidate(BaseModel):
     importance: float = Field(ge=0, le=1)
     confidence: float = Field(ge=0, le=1)
     temporal_type: TemporalType
-    valid_from: date | None = None
-    valid_until: date | None = None
+    status: MemoryStatus
     evidence: str = Field(min_length=1)
 
 
@@ -60,11 +59,22 @@ class StoredMemory(MemoryCandidate):
     """已经写入长期记忆库的正式记忆。"""
 
     id: str = Field(min_length=1)
-    status: MemoryStatus = MemoryStatus.ACTIVE
     created_at: datetime
     updated_at: datetime
     last_confirmed_at: datetime
     confirmation_count: int = Field(default=1, ge=1)
+
+    @model_validator(mode="before")
+    @classmethod
+    def read_legacy_payload(cls, value):
+        """仅兼容读取旧库已废弃的日期字段，候选输出仍严格遵守新 Schema。"""
+        if isinstance(value, dict):
+            value = {
+                key: item
+                for key, item in value.items()
+                if key not in {"valid_from", "valid_until"}
+            }
+        return value
 
 
 class MemorySearchResult(BaseModel):
