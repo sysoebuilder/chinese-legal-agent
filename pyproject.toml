@@ -16,6 +16,8 @@ dependencies = [
     "python-dotenv>=1.2,<2",
     "jsonschema>=4.26,<5",
     "qdrant-client>=1.19,<2",
+    "bm25s>=0.3,<1",
+    "jieba>=0.42,<1",
     "datasets>=4,<5",
     "rich>=14,<15",
 ]

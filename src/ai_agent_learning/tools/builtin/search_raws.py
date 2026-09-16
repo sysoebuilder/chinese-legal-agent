@@ -1,23 +1,23 @@
+"""两路召回的中国法规检索工具。"""
+
+import asyncio
+import os
 from typing import Any
 
+from qdrant_client import AsyncQdrantClient, models
+
+from ai_agent_learning.law_index import LawBm25Index
 from ai_agent_learning.memory.embedding import GlmEmbeddingClient
-from ai_agent_learning.memory.schema import MemorySearchResult
-from ai_agent_learning.memory.store import QdrantMemoryStore
+from ai_agent_learning.qdrant_config import DEFAULT_QDRANT_URL
 from ai_agent_learning.tools.contracts import RiskLevel, ToolSpec
 
 SPEC = ToolSpec(
     name="search_raws",
-
     description=(
-        "从中国法律法规与规章知识库中检索相关法律条文。"
-        "将用户问题拆分为一个或多个相互独立的法律事实争议点进行检索。"
-        "每个 retrieval_case 应描述一个独立问题，不能只是对同一问题进行重复改写。"
-        "case_facts 必须保持客观，只描述已知事实，不得预设违法、合法、"
-        "应当赔偿、合同无效等法律结论。"
+        "从中国法律法规与规章知识库中检索相关资料。"
+        "将问题拆成互不重复的法律争议点；关键词保持中性，案件事实不得预设法律结论。"
     ),
-
     risk_level=RiskLevel.LOW,
-
     input_schema={
         "type": "object",
         "properties": {
@@ -28,58 +28,115 @@ SPEC = ToolSpec(
                 "items": {
                     "type": "object",
                     "properties": {
+                        "issue": {"type": "string", "minLength": 1},
                         "title_keywords": {
                             "type": "array",
-                            "items": {
-                                "type": "string"
-                            },
-                            "description": (
-                                "用于法规标题检索的关键词。"
-                                "不知道相关法规时可以为空，不得编造法规名称。"
-                            )
+                            "items": {"type": "string", "minLength": 1},
                         },
-
                         "content_keywords": {
                             "type": "array",
-                            "items": {
-                                "type": "string"
-                            },
                             "minItems": 1,
-                            "description": (
-                                "用于正文 BM25/关键词检索的中性法律术语、"
-                                "行为、对象或条件。"
-                            )
+                            "items": {"type": "string", "minLength": 1},
                         },
-
-                        "case_facts": {
-                            "type": "string",
-                            "minLength": 1,
-                            "description": (
-                                "围绕当前争议点整理出的客观案件事实，"
-                                "用于正文语义向量检索。"
-                                "不得加入未经法律资料支持的结论。"
-                            )
-                        }
+                        "case_facts": {"type": "string", "minLength": 1},
                     },
-
                     "required": [
                         "issue",
                         "title_keywords",
                         "content_keywords",
-                        "case_facts"
+                        "case_facts",
                     ],
-
-                    "additionalProperties": False
-                }
+                    "additionalProperties": False,
+                },
             }
         },
-
         "required": ["retrieval_cases"],
-        "additionalProperties": False
+        "additionalProperties": False,
     },
-
     has_side_effects=False,
     supports_idempotent_retry=True,
-    manages_own_timeout=False
+    manages_own_timeout=False,
 )
 
+
+async def handler(retrieval_cases: list[dict[str, Any]]) -> dict[str, Any]:
+    index = await asyncio.to_thread(LawBm25Index)
+    embedding = GlmEmbeddingClient(dimensions=1024)
+    store = AsyncQdrantClient(
+        url=(os.getenv("QDRANT_URL") or DEFAULT_QDRANT_URL).strip(), timeout=60
+    )
+    try:
+        vectors = await embedding.embed(
+            [case["case_facts"] for case in retrieval_cases]
+        )
+        output = []
+        for case, vector in zip(retrieval_cases, vectors, strict=True):
+            title_ids = await asyncio.to_thread(
+                index.title_candidates, case["title_keywords"], 50
+            )
+            title_rows = (
+                await store.retrieve(
+                    "npc_laws", ids=title_ids, with_payload=True, with_vectors=False
+                )
+                if title_ids
+                else []
+            )
+            by_id = {str(row.id): row for row in title_rows}
+            unique_ids, seen_titles = [], set()
+            for point_id in title_ids:
+                row = by_id.get(point_id)
+                if row is None:
+                    continue
+                payload = row.payload or {}
+                title = str(payload.get("title") or "").strip()
+                if title not in seen_titles:
+                    seen_titles.add(title)
+                    unique_ids.append(point_id)
+            lexical = await asyncio.to_thread(
+                index.rerank_content, case["content_keywords"], unique_ids, 10
+            )
+            semantic = await store.query_points(
+                "npc_laws",
+                query=vector,
+                using="text",
+                limit=10,
+                score_threshold=0.6,
+                with_payload=True,
+                search_params=models.SearchParams(exact=False),
+            )
+            merged: dict[str, dict[str, Any]] = {}
+            lexical_rows = (
+                await store.retrieve(
+                    "npc_laws",
+                    ids=[point_id for point_id, _ in lexical],
+                    with_payload=True,
+                    with_vectors=False,
+                )
+                if lexical
+                else []
+            )
+            lexical_payload = {str(row.id): row.payload for row in lexical_rows}
+            for point_id, score in lexical:
+                merged[point_id] = {
+                    "id": point_id,
+                    "payload": lexical_payload.get(point_id),
+                    "bm25_score": score,
+                    "vector_score": None,
+                }
+            for point in semantic.points:
+                point_id = str(point.id)
+                item = merged.setdefault(
+                    point_id,
+                    {
+                        "id": point_id,
+                        "payload": point.payload,
+                        "bm25_score": None,
+                        "vector_score": point.score,
+                    },
+                )
+                item["vector_score"] = point.score
+            output.append({"issue": case["issue"], "laws": list(merged.values())})
+        return {"results": output}
+    finally:
+        await store.close()
+        await embedding.close()

@@ -8,12 +8,13 @@
   python raw/service.py status
   python raw/service.py collect
 
-默认原始数据 raw/npc；任务/断点 data/rag/batch；数据库 data/rag/qdrant。
+默认原始数据 raw/npc；任务/断点 data/rag/batch；入库使用本机 Qdrant 服务端。
 collect 只查询一次任务状态，未完成时稍后重新运行；不会长时间等待。
 不要为同一数据重复 prepare/submit：不同工作目录意味着新的付费任务。
 """
 
 import argparse
+import asyncio
 import hashlib
 import json
 import math
@@ -26,6 +27,8 @@ import httpx
 import pyarrow.parquet as pq
 from dotenv import load_dotenv
 from qdrant_client import QdrantClient, models
+
+from ai_agent_learning.qdrant_server import QdrantServer
 
 ROOT = Path(__file__).resolve().parents[1]
 DIMENSIONS = {"text": 1024}
@@ -81,6 +84,7 @@ def prepare(args) -> None:
         "dimensions": DIMENSIONS,
         "collection": args.collection,
         "database": str(args.database.resolve()),
+        "database_url": args.database_url,
         "count": 0,
         "shards": [],
     }
@@ -90,8 +94,8 @@ def prepare(args) -> None:
     size = 0
     seen = {}
     existing = set()
-    if args.skip_existing and args.database.exists():
-        with closing(QdrantClient(path=str(args.database.resolve()))) as store:
+    if args.skip_existing:
+        with closing(QdrantClient(url=args.database_url, timeout=60)) as store:
             if store.collection_exists(args.collection):
                 offset = None
                 while True:
@@ -267,6 +271,8 @@ def download(client, file_id, path):
 
 def import_results(state, shard, work, external_store=None) -> None:
     """稳定 UUID upsert：中断后重跑不会新增重复 point。"""
+    if state["collection"] == "memories":
+        raise ValueError("禁止写入长期记忆集合")
     output = work / f"{shard['name']}.output.jsonl"
     if not output.exists():
         return
@@ -279,7 +285,11 @@ def import_results(state, shard, work, external_store=None) -> None:
     with (
         nullcontext(external_store)
         if external_store is not None
-        else closing(QdrantClient(path=str(db)))
+        else closing(
+            QdrantClient(
+                url=state.get("database_url", "http://127.0.0.1:6333"), timeout=60
+            )
+        )
     ) as store:
         collection = state["collection"]
         if store.collection_exists(collection):
@@ -384,7 +394,16 @@ def collect(args) -> None:
                         db = Path(state["database"]).resolve()
                         if db == (ROOT / "data" / "memory" / "qdrant").resolve():
                             raise ValueError("禁止写入长期记忆数据库")
-                        store = stack.enter_context(closing(QdrantClient(path=str(db))))
+                        store = stack.enter_context(
+                            closing(
+                                QdrantClient(
+                                    url=state.get(
+                                        "database_url", "http://127.0.0.1:6333"
+                                    ),
+                                    timeout=60,
+                                )
+                            )
+                        )
                     import_results(state, shard, args.work_dir, external_store=store)
                 if not batch.get("output_file_id"):
                     print("没有成功输出，未入库；请查看平台任务错误")
@@ -435,6 +454,7 @@ def main():
         "--database", type=Path, default=ROOT / "data" / "rag" / "qdrant"
     )
     parser.add_argument("--collection", default="npc_laws")
+    parser.add_argument("--database-url", default="http://127.0.0.1:6333")
     parser.add_argument("--requests-per-file", type=int, default=5000)
     parser.add_argument("--limit", type=int)
     parser.add_argument(
@@ -444,9 +464,25 @@ def main():
     )
     args = parser.parse_args()
     args.work_dir = args.work_dir.resolve()
-    {"prepare": prepare, "submit": submit, "status": status, "collect": collect}[
-        args.command
-    ](args)
+    if args.collection == "memories":
+        raise ValueError("禁止写入长期记忆集合")
+    server = QdrantServer()
+    try:
+        if args.command == "collect" or (
+            args.command == "prepare" and args.skip_existing
+        ):
+            database_url = (
+                load_state(args).get("database_url", args.database_url)
+                if args.command == "collect"
+                else args.database_url
+            )
+            if database_url.rstrip("/") == "http://127.0.0.1:6333":
+                asyncio.run(server.start())
+        {"prepare": prepare, "submit": submit, "status": status, "collect": collect}[
+            args.command
+        ](args)
+    finally:
+        asyncio.run(server.close())
 
 
 if __name__ == "__main__":
