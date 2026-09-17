@@ -7,6 +7,7 @@ from ai_agent_learning.memory.schema import (
     MemoryCandidate,
     MemoryCandidateBatch,
     MemoryDecision,
+    MemoryDecisionBatch,
     StoredMemory,
 )
 from ai_agent_learning.schema import Message
@@ -81,5 +82,45 @@ def build_memory_decision_instructions(
             f"JSON Schema：{schema}\n"
             f"候选记忆：{candidate.model_dump_json()}\n"
             f"相关旧记忆：{old_memories_json}"
+        ),
+    )
+
+
+def build_memory_decisions_instructions(
+    candidates_with_memories: list[tuple[MemoryCandidate, list[StoredMemory]]],
+) -> Message:
+    """构造整批候选记忆与各自相关旧记忆的决策提示词。"""
+    schema = json.dumps(MemoryDecisionBatch.model_json_schema(), ensure_ascii=False)
+    items = [
+        {
+            "candidate_index": index,
+            "candidate": candidate.model_dump(mode="json"),
+            "old_memories": [
+                memory.model_dump(mode="json") for memory in old_memories
+            ],
+        }
+        for index, (candidate, old_memories) in enumerate(candidates_with_memories)
+    ]
+    return Message(
+        role="system",
+        content=(
+            "你是长期记忆批量决策器。请逐条比较候选记忆与该条目提供的相关旧记忆，"
+            "每个 candidate_index 必须且只能返回一次决定，不能遗漏、重复或改变索引。"
+            "add 表示候选是独立的新事实；confirm 表示候选与一条旧记忆含义一致；"
+            "replace 表示候选修正、更新、合并或废弃旧记忆；ignore 表示候选没有新增价值。"
+            "没有相关旧记忆时通常使用 add，且不得引用其他条目的旧记忆。"
+            "confirm 必须引用当前条目的一条旧记忆 ID。replace 必须引用当前条目中"
+            "所有被替换的旧记忆 ID，并生成完整、独立、忠于现有证据的 replacement。"
+            "候选和 replacement 必须包含 status：active 为有效，superseded 为修正、撤销或废弃，"
+            "expired 为过期。add 保存候选 status；replace 保存 replacement.status。"
+            "confirm 只增加确认次数，不能更新 status；含义一致但状态变化时必须使用 replace。"
+            "需要废弃旧记忆时用 replace，replacement.status 必须为 superseded 或 expired。"
+            "add 和 ignore 不得包含 target_ids 或 replacement。"
+            "不得让多个候选对同一个旧记忆执行相互冲突的动作。"
+            "只能引用各自条目提供的旧记忆 ID，不得编造事实或 ID。"
+            "只输出符合 JSON Schema 的 JSON 对象，不输出 Markdown。\n"
+            f"JSON Schema：{schema}\n"
+            "待决策条目："
+            + json.dumps(items, ensure_ascii=False)
         ),
     )

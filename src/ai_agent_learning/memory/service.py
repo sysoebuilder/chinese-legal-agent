@@ -20,7 +20,7 @@ from ai_agent_learning.memory.schema import (
 from ai_agent_learning.memory.store import QdrantMemoryStore
 from ai_agent_learning.schema import Message, ModelRequest
 
-SIMILARITY_THRESHOLD = 0.5
+SIMILARITY_THRESHOLD = 0.7
 SIMILARITY_LIMIT = 10
 
 
@@ -57,20 +57,25 @@ class MemoryService:
         embedding, store = self._ensure_resources()
         await store.initialize()
         batch = await self._create_candidates(request)
-        decisions: list[MemoryDecision] = []
         vectors = await embedding.embed(
             [candidate.content for candidate in batch.memories]
         )
 
+        candidates_with_memories: list[
+            tuple[MemoryCandidate, list[StoredMemory]]
+        ] = []
         for candidate, vector in zip(batch.memories, vectors, strict=True):
             old_memories = await self._find_related_memories(candidate, vector)
-            decision = await self._decision_maker.decide(
-                request.model,
-                candidate,
-                old_memories,
-            )
+            candidates_with_memories.append((candidate, old_memories))
+
+        decisions = await self._decision_maker.decide_many(
+            request.model,
+            candidates_with_memories,
+        )
+        for candidate, vector, decision in zip(
+            batch.memories, vectors, decisions, strict=True
+        ):
             await self._apply_decision(candidate, vector, decision)
-            decisions.append(decision)
         return decisions
 
     async def close(self) -> None:

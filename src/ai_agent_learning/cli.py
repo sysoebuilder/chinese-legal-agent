@@ -1,7 +1,7 @@
 import argparse
 import asyncio
 
-from ai_agent_learning.main import run_chat, run_config, run_taskplan
+from ai_agent_learning.main import run_chat, run_config, run_law_install, run_taskplan
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -13,7 +13,7 @@ def create_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--version",
         action="version",
-        version="agent100 0.4.1",
+        version="agent100 0.5.0",
     )
 
     commands = parser.add_subparsers(
@@ -42,6 +42,19 @@ def create_parser() -> argparse.ArgumentParser:
         help="需要规划的任务目标",
     )
 
+    laws_parser = commands.add_parser(
+        "laws",
+        help="管理离线法规知识库",
+    )
+    laws_commands = laws_parser.add_subparsers(
+        dest="laws_command",
+        required=True,
+    )
+    laws_commands.add_parser(
+        "install",
+        help="将随安装包提供的原始法规和向量安装到 Qdrant",
+    )
+
     return parser
 
 
@@ -57,6 +70,9 @@ def main() -> None:
 
         elif args.command == "taskplan":
             asyncio.run(run_taskplan(args.goal))
+
+        elif args.command == "laws" and args.laws_command == "install":
+            run_law_install()
 
     except KeyboardInterrupt:
         print("\n已退出")

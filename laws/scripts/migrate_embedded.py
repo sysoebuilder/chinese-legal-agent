@@ -7,7 +7,7 @@ from pathlib import Path
 
 from qdrant_client import QdrantClient, models
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 URL = "http://127.0.0.1:6333"
 
 

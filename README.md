@@ -3,7 +3,7 @@
 **从模型 API 到工具调用：一个持续迭代的 Python Agent CLI。**  
 **From model APIs to tool use: an evolving Python Agent CLI.**
 
-Version **0.4.1** · Python **3.11+** · Command **`agent100`**
+Version **0.5.0** · Python **3.11+** · Command **`agent100`**
 
 [中文](#中文) · [English](#english)
 
@@ -70,7 +70,7 @@ Web Search 功能基于 GLM 搜索引擎实现，长期记忆使用 GLM Embeddin
 | `tests/` | 模型适配、Agent、工具、运行时与终端相关测试 |
 | `docs/` | 实现说明与设计细节 |
 
-实现说明：[GLM 接入](docs/glm-model-client.md) · [搜索工具](docs/web-search.md) · [长期记忆](docs/memory-system.md) · [上下文估算](docs/context-token-estimation.md) · [终端界面](docs/terminal-ui.md)
+实现说明：[GLM 接入](docs/glm-model-client.md) · [搜索工具](docs/web-search.md) · [上下文估算](docs/context-token-estimation.md) · [终端界面](docs/terminal-ui.md)
 
 ### 测试与打包
 
@@ -138,7 +138,7 @@ Sessions, logs, plans, and the local Qdrant memory database are stored in `data/
 
 `tests/` covers model adapters, agent behavior, tools, runtime, and terminal behavior. `docs/` contains implementation notes, primarily in Chinese.
 
-Implementation notes: [GLM integration](docs/glm-model-client.md) · [Web search](docs/web-search.md) · [Long-term memory](docs/memory-system.md) · [Context estimates](docs/context-token-estimation.md) · [Terminal UI](docs/terminal-ui.md)
+Implementation notes: [GLM integration](docs/glm-model-client.md) · [Web search](docs/web-search.md) · [Context estimates](docs/context-token-estimation.md) · [Terminal UI](docs/terminal-ui.md)
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install pytest build

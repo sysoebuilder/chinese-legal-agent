@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=77"]
+requires = ["setuptools>=77", "wheel>=0.45"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "ai-agent-learning"
-version = "0.4.1"
+version = "0.5.0"
 description = "A personal LLM command-line assistant"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -16,6 +16,7 @@ dependencies = [
     "python-dotenv>=1.2,<2",
     "jsonschema>=4.26,<5",
     "qdrant-client>=1.19,<2",
+    "pyarrow>=21,<26",
     "bm25s>=0.3,<1",
     "jieba>=0.42,<1",
     "datasets>=4,<5",
@@ -30,3 +31,11 @@ where = ["src"]
 
 [tool.setuptools]
 include-package-data = false
+
+[tool.setuptools.package-data]
+ai_agent_learning = [
+    "runtime/qdrant.exe",
+    "laws/raw/npc/*.parquet",
+    "laws/*.zip",
+    "laws/*.sha256",
+]

@@ -7,13 +7,14 @@ from openai import AsyncOpenAI
 from openai.types.chat import ChatCompletionMessage, ChatCompletionMessageParam
 
 from ai_agent_learning.memory.prompts import (
-    build_memory_decision_instructions,
+    build_memory_decisions_instructions,
     build_memory_instructions,
 )
 from ai_agent_learning.memory.schema import (
     MemoryCandidate,
     MemoryCandidateBatch,
     MemoryDecision,
+    MemoryDecisionBatch,
     StoredMemory,
 )
 from ai_agent_learning.planning.schema import TaskPlan
@@ -317,13 +318,14 @@ class GlmModelClient:
                 return MemoryCandidateBatch.model_validate_json(content)
         raise ValueError("模型连续三次没有返回候选记忆")
 
-    async def create_memory_decision(
+    async def create_memory_decisions(
         self,
         model: str,
-        candidate: MemoryCandidate,
-        old_memories: list[StoredMemory],
-    ) -> MemoryDecision:
-        instructions = build_memory_decision_instructions(candidate, old_memories)
+        candidates_with_memories: list[
+            tuple[MemoryCandidate, list[StoredMemory]]
+        ],
+    ) -> MemoryDecisionBatch:
+        instructions = build_memory_decisions_instructions(candidates_with_memories)
         completion = await self._client.chat.completions.create(
             model=model,
             messages=cast(
@@ -332,7 +334,7 @@ class GlmModelClient:
                     {"role": instructions.role, "content": instructions.content},
                     {
                         "role": "user",
-                        "content": "请根据以上规则生成本条候选记忆的 JSON 决策。",
+                        "content": "请根据以上规则生成整批候选记忆的 JSON 决策。",
                     },
                 ],
             ),
@@ -341,17 +343,30 @@ class GlmModelClient:
             stream=False,
         )
         if not completion.choices:
-            raise ValueError("模型没有返回记忆决定")
+            raise ValueError("模型没有返回批量记忆决定")
         choice = completion.choices[0]
         if choice.finish_reason != "stop":
             raise ValueError(
-                "记忆决定响应未正常完成："
+                "批量记忆决定响应未正常完成："
                 f"{choice.finish_reason or '缺少结束标记'}"
             )
         content = (choice.message.content or "").strip()
         if not content:
-            raise ValueError("模型没有返回记忆决定")
-        return MemoryDecision.model_validate_json(content)
+            raise ValueError("模型没有返回批量记忆决定")
+        return MemoryDecisionBatch.model_validate_json(content)
+
+    async def create_memory_decision(
+        self,
+        model: str,
+        candidate: MemoryCandidate,
+        old_memories: list[StoredMemory],
+    ) -> MemoryDecision:
+        batch = await self.create_memory_decisions(
+            model, [(candidate, old_memories)]
+        )
+        if len(batch.decisions) != 1 or batch.decisions[0].candidate_index != 0:
+            raise ValueError("单条记忆决定响应的候选索引无效")
+        return batch.decisions[0].decision
 
     async def tokenization(self, messages: list[Message], model: str) -> int:
         async def create_request() -> httpx.Response:
@@ -578,13 +593,14 @@ class DeepSeekClient:
                 return MemoryCandidateBatch.model_validate_json(content)
         raise ValueError("模型连续三次没有返回候选记忆")
 
-    async def create_memory_decision(
+    async def create_memory_decisions(
         self,
         model: str,
-        candidate: MemoryCandidate,
-        old_memories: list[StoredMemory],
-    ) -> MemoryDecision:
-        instructions = build_memory_decision_instructions(candidate, old_memories)
+        candidates_with_memories: list[
+            tuple[MemoryCandidate, list[StoredMemory]]
+        ],
+    ) -> MemoryDecisionBatch:
+        instructions = build_memory_decisions_instructions(candidates_with_memories)
         completion = await self._client.chat.completions.create(
             model=model,
             messages=cast(
@@ -596,17 +612,30 @@ class DeepSeekClient:
             stream=False,
         )
         if not completion.choices:
-            raise ValueError("模型没有返回记忆决定")
+            raise ValueError("模型没有返回批量记忆决定")
         choice = completion.choices[0]
         if choice.finish_reason != "stop":
             raise ValueError(
-                "记忆决定响应未正常完成："
+                "批量记忆决定响应未正常完成："
                 f"{choice.finish_reason or '缺少结束标记'}"
             )
         content = (choice.message.content or "").strip()
         if not content:
-            raise ValueError("模型没有返回记忆决定")
-        return MemoryDecision.model_validate_json(content)
+            raise ValueError("模型没有返回批量记忆决定")
+        return MemoryDecisionBatch.model_validate_json(content)
+
+    async def create_memory_decision(
+        self,
+        model: str,
+        candidate: MemoryCandidate,
+        old_memories: list[StoredMemory],
+    ) -> MemoryDecision:
+        batch = await self.create_memory_decisions(
+            model, [(candidate, old_memories)]
+        )
+        if len(batch.decisions) != 1 or batch.decisions[0].candidate_index != 0:
+            raise ValueError("单条记忆决定响应的候选索引无效")
+        return batch.decisions[0].decision
 
     async def tokenization(self, messages: list[Message], model: str) -> int:
         """用最小流式请求获取输入 Token 数，不包含生成的 Token。

@@ -1,3 +1,4 @@
+import asyncio
 import json
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -9,6 +10,7 @@ from ai_agent_learning.agent.loop import AgentLoop
 from ai_agent_learning.agent.policy import AgentLimits, AgentPolicy
 from ai_agent_learning.agent.state import AgentRunResult, StopReason
 from ai_agent_learning.context import save_context, select_context
+from ai_agent_learning.law_install import install_laws
 from ai_agent_learning.logging_config import configure_logging
 from ai_agent_learning.memory.service import MemoryService
 from ai_agent_learning.model import DeepSeekClient, GlmModelClient
@@ -121,6 +123,11 @@ def run_config() -> None:
         return
     ui.show_notice(f"当前模型：{selected.provider} / {selected.model}")
     ui.show_notice(f"已更新：{path}")
+
+
+def run_law_install() -> None:
+    """执行完整的离线法规库安装流程。"""
+    asyncio.run(install_laws())
 
 
 @asynccontextmanager

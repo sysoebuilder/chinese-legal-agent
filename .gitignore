@@ -11,9 +11,10 @@ build/
 dist/
 htmlcov/
 /data/
+/laws/npc-law-vectors.zip
+/laws/npc-law-vectors.zip.sha256
 /src/data/
 /projects/
 /days/
-/raw/npc/
 /raw/.datasets-cache/
 /raw/.npc-import-checkpoint.json

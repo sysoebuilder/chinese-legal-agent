@@ -3,12 +3,12 @@
 标题及其他字段只保存为 payload，不提交到向量化接口。
 
 项目根目录执行（prepare 不联网，submit 会产生 API 费用）：
-  python raw/service.py prepare --limit 100
-  python raw/service.py submit
-  python raw/service.py status
-  python raw/service.py collect
+  python laws/scripts/batch_embed.py prepare --limit 100
+  python laws/scripts/batch_embed.py submit
+  python laws/scripts/batch_embed.py status
+  python laws/scripts/batch_embed.py collect
 
-默认原始数据 raw/npc；任务/断点 data/rag/batch；入库使用本机 Qdrant 服务端。
+默认原始数据 laws/raw/npc；任务/断点 data/rag/batch；入库使用本机 Qdrant 服务端。
 collect 只查询一次任务状态，未完成时稍后重新运行；不会长时间等待。
 不要为同一数据重复 prepare/submit：不同工作目录意味着新的付费任务。
 """
@@ -30,7 +30,7 @@ from qdrant_client import QdrantClient, models
 
 from ai_agent_learning.qdrant_server import QdrantServer
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 DIMENSIONS = {"text": 1024}
 MODEL = "embedding-3"
 ENDPOINT = "/v4/embeddings"
@@ -446,7 +446,9 @@ def main():
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument("command", choices=("prepare", "submit", "status", "collect"))
-    parser.add_argument("--source-dir", type=Path, default=ROOT / "raw" / "npc")
+    parser.add_argument(
+        "--source-dir", type=Path, default=ROOT / "laws" / "raw" / "npc"
+    )
     parser.add_argument(
         "--work-dir", type=Path, default=ROOT / "data" / "rag" / "batch"
     )

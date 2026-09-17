@@ -14,7 +14,7 @@ def find_project_root() -> Path:
 
 
 def get_data_dir() -> Path:
-    """允许用户通过环境变量覆盖数据目录。"""
+    """默认使用当前项目的 data 目录，并允许环境变量覆盖。"""
     configured = os.getenv("LLM_CLI_DATA_DIR")
 
     if configured:

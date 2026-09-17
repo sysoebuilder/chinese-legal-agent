@@ -107,3 +107,20 @@ class MemoryDecision(BaseModel):
         elif not self.target_ids or self.replacement is None:
             raise ValueError("REPLACE 必须指定目标 ID 并提供替换内容")
         return self
+
+
+class IndexedMemoryDecision(BaseModel):
+    """批量决策中一条候选记忆对应的决定。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    candidate_index: int = Field(ge=0)
+    decision: MemoryDecision
+
+
+class MemoryDecisionBatch(BaseModel):
+    """模型一次返回的整批记忆决定。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    decisions: list[IndexedMemoryDecision] = Field(default_factory=list)
