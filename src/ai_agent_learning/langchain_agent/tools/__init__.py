@@ -1,7 +1,4 @@
-"""LangChain 工具集合。
-
-查询工具可以直接交给 Agent；有外部副作用的工具需要等审批机制迁移后再注册。
-"""
+"""LangChain 工具集合。"""
 
 from langchain_core.tools import BaseTool
 
@@ -38,12 +35,8 @@ TOOL_SPECS = {
     )
 }
 
-# 目前 newchat 还没有接入旧版的高风险工具审批流程。
-NEW_CHAT_TOOLS = READ_ONLY_TOOLS
-
 __all__ = [
     "ALL_TOOLS",
-    "NEW_CHAT_TOOLS",
     "READ_ONLY_TOOLS",
     "SIDE_EFFECT_TOOLS",
     "TOOL_SPECS",

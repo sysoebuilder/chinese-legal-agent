@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 from enum import Enum
 
@@ -25,15 +25,3 @@ class ToolCall():
     id: str
     name: str
     arguments: dict[str, Any]
-    # Chat Completions 工具续调需要原始 assistant 消息（含 reasoning_content）。
-    assistant_message: dict[str, Any] | None = field(
-        default=None, repr=False, compare=False
-    )
-
-@dataclass
-class ToolResult():
-    call_id: str
-    success: bool
-    data: Any | None = None
-    error: dict[str, Any] | None = None
-    metadata: dict[str, Any] | None = None

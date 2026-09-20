@@ -33,7 +33,7 @@ MODEL_BASE_URL='https://api.deepseek.com'
 
 ## 3. 启动
 
-`agent100 chat` 和 `agent100 taskplan` 由 `create_runtime()` 读取当前配置。四个模型字段只来自 `active-model.env`，不受系统环境变量或源 `.env` 中同名字段覆盖。配置文件缺失或连接配置无效时提示执行 `agent100 config`。
+`agent100 newchat` 在启动时读取当前配置。四个模型字段只来自 `active-model.env`，不受系统环境变量或源 `.env` 中同名字段覆盖。配置文件缺失或连接配置无效时提示执行 `agent100 config`。
 
 修改源 `.env` 不会自动更换运行中的模型或下次启动的模型。需要再次执行 `config` 才会更新当前快照；正在运行的会话保持原来的连接。
 

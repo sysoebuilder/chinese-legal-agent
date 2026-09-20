@@ -4,6 +4,22 @@
 > 目标：在保留现有业务能力的前提下，将 Agent 运行框架逐步迁移到 LangChain + LangGraph。  
 > 核心原则：先建立适配层，再迁移流程；先并行验证，再替换旧实现；不按文件一次性重写。
 
+## 当前迁移结果
+
+截至 Day 22，通用聊天主流程已经完成迁移：
+
+- `newchat` 是唯一聊天入口，使用 LangChain `create_agent` 和 LangGraph 运行时。
+- GLM、DeepSeek 已使用对应的 LangChain 模型适配器。
+- 六个现有工具已经迁移为 `StructuredTool`。
+- 工具审批、网络故障重试、上下文摘要和基础观测已经接入中间件。
+- SQLite 同时保存会话目录和 LangGraph checkpoint，`session.thread_id` 用作图的 `thread_id`。
+- 每轮完成后，记忆整理通过后台队列与下一轮用户输入并行运行。
+- 旧版 `chat` 已从主项目移除并在 E 盘单独归档。
+- `taskplan` 功能确认弃用，旧 Planner–Executor 代码已经删除，不纳入后续迁移。
+
+本文后续阶段保留为迁移过程和学习记录；其中关于新旧版本并行、Planner–Executor
+迁移及回退旧入口的内容不再代表当前项目状态。
+
 ## 一、先建立正确概念
 
 ### 1. LangChain 负责“组件标准化”
@@ -33,7 +49,7 @@ LangChain 在本项目中的主要作用：统一模型、消息、工具及结�
 - Streaming：向终端持续发送模型和节点事件
 - Store：跨线程保存长期信息
 
-LangGraph 在本项目中的主要作用：替换自定义 Agent 主循环，承载法律问答、规划执行、审批和恢复流程。
+LangGraph 在本项目中的主要作用：替换自定义 Agent 主循环，承载会话状态、工具调用、审批和恢复流程。
 
 ### 3. 必须区分的三类状态
 
@@ -59,7 +75,6 @@ Main LangGraph
     │   ├── Retrieve Laws
     │   ├── Validate Retrieval
     │   └── Generate Answer / Refuse
-    ├── Planner–Executor Subgraph
     ├── Approval Flow
     └── Memory Flow
         ├── Recall Memory
@@ -600,13 +615,13 @@ dayXX-refactor:切换默认入口到LangGraph并清理旧Agent循环
 
 ## 十七、下一步
 
-当前只做第一小步：
+通用 Agent 迁移已经完成，下一阶段聚焦法律模块可靠性：
 
-1. 建立迁移分支并冻结测试基线。
-2. 安装当前稳定版 LangChain、LangGraph 及所需模型适配包。
-3. 创建独立的 `langgraph_agent` 目录。
-4. 用 LangChain 包装 `current_time`。
-5. 构建只有 `call_model` 和 `tools` 两类节点的最小图。
-6. 保留现有主程序入口，不立即切换。
+1. 判断用户问题是否属于法律问题。
+2. 法律问题固定先查询本地法律库。
+3. 对候选法规执行时效和地域适用性过滤。
+4. 空召回或没有可用依据时，由程序分支阻止生成法律结论。
+5. 验证最终回答确实以检索结果为依据。
 
-完成这一步后，再开始法律问答子图；不要提前全量迁移。
+该部分涉及不可绕过的业务约束，适合在现有 Agent 外增加明确的 LangGraph 节点和条件边，
+而不是只依赖系统提示词。

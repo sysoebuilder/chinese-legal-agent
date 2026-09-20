@@ -54,7 +54,7 @@ class SearchResponse(BaseModel):
 
 
 async def handler(query: str, count: int = 5) -> dict[str, Any]:
-    """每次调用独立管理 HTTP 连接，重试由 ToolExecutor 管理。"""
+    """每次调用独立管理 HTTP 连接，重试由 Agent 中间件管理。"""
     api_key = os.getenv("ZAI_API_KEY", "").strip()
     if not api_key:
         raise ValueError("缺少 ZAI_API_KEY 配置")

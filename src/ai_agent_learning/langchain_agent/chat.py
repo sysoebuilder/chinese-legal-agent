@@ -170,7 +170,7 @@ def _review_interrupt(
 
 
 async def run_new_chat() -> None:
-    """运行与旧 chat 隔离的 LangChain/LangGraph 多轮会话。"""
+    """运行 LangChain/LangGraph 多轮会话。"""
     configure_logging()
     logger.info("新版会话启动", extra={"event": "newchat.started"})
     config = load_active_model()

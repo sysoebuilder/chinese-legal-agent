@@ -14,7 +14,6 @@ dependencies = [
     "httpx>=0.28,<1",
     "pydantic>=2.13,<3",
     "python-dotenv>=1.2,<2",
-    "jsonschema>=4.26,<5",
     "qdrant-client>=1.19,<2",
     "pyarrow>=21,<26",
     "bm25s>=0.3,<1",
