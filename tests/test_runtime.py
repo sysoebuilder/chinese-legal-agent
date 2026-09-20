@@ -33,6 +33,7 @@ def test_runtime_closes_model_connection(failure_stage, monkeypatch):
                     "run_command",
                     "web_search",
                     "search_memory",
+                    "search_raws",
                 }
                 if failure_stage == "body":
                     raise RuntimeError("body failed")

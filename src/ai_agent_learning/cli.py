@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 
+from ai_agent_learning.langchain_agent.chat import run_new_chat
 from ai_agent_learning.main import run_chat, run_config, run_law_install, run_taskplan
 
 
@@ -29,6 +30,11 @@ def create_parser() -> argparse.ArgumentParser:
     commands.add_parser(
         "chat",
         help="进入多轮会话",
+    )
+
+    commands.add_parser(
+        "newchat",
+        help="进入 LangChain/LangGraph 多轮会话",
     )
 
     taskplan_parser = commands.add_parser(
@@ -67,6 +73,9 @@ def main() -> None:
 
         elif args.command == "chat":
             asyncio.run(run_chat())
+
+        elif args.command == "newchat":
+            asyncio.run(run_new_chat())
 
         elif args.command == "taskplan":
             asyncio.run(run_taskplan(args.goal))

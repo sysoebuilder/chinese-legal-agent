@@ -32,6 +32,12 @@ class JsonFormatter(logging.Formatter):
         "file_count",
         "error_type",
         "name_length",
+        "tool_name",
+        "tool_call_id",
+        "message_count",
+        "decision_count",
+        "queue_size",
+        "approved",
     )
 
     def format(self, record: logging.LogRecord) -> str:

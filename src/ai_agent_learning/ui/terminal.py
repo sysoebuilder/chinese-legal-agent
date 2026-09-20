@@ -1,5 +1,7 @@
+from collections.abc import Sequence
 from dataclasses import replace
 from getpass import getpass
+from typing import Protocol
 
 from rich.console import Console, Group
 from rich.live import Live
@@ -16,8 +18,11 @@ from ai_agent_learning.model_config import (
     create_model_config,
     source_config_path,
 )
-from ai_agent_learning.schema import Session
 from ai_agent_learning.tools.contracts import ToolCall, ToolSpec
+
+
+class SessionListItem(Protocol):
+    name: str
 
 
 class TerminalUI:
@@ -131,7 +136,7 @@ class TerminalUI:
         finally:
             self.begin_turn()
 
-    def show_sessions(self, sessions: list[Session]) -> None:
+    def show_sessions(self, sessions: Sequence[SessionListItem]) -> None:
         table = Table(
             title="选择会话", border_style="dim", show_edge=False, padding=(0, 2)
         )

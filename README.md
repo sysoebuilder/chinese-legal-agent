@@ -50,8 +50,11 @@ python -m venv .venv
 .\.venv\Scripts\agent100.exe --version
 .\.venv\Scripts\agent100.exe config
 .\.venv\Scripts\agent100.exe chat
+.\.venv\Scripts\agent100.exe newchat
 .\.venv\Scripts\agent100.exe taskplan "搜索 Python 日志最佳实践并整理学习提纲"
 ```
+
+`newchat` 是迁移中的 LangChain/LangGraph 入口，目前提供多轮内存会话、流式终端输出和 `current_time` 工具；原有 `chat` 功能保持不变。
 
 Web Search 功能基于 GLM 搜索引擎实现，长期记忆使用 GLM Embedding-3 生成向量，两项功能都必须配置 GLM API Key（环境变量名为 `ZAI_API_KEY`）；即使当前对话模型选择 DeepSeek，该配置仍不可省略。邮件工具另需配置 `QQ_SMTP_USERNAME` 和 `QQ_SMTP_AUTH_CODE`，后者是 SMTP 授权码，不是邮箱登录密码。模型、搜索和向量化调用使用你自己的服务账号，可能产生费用。
 
@@ -125,8 +128,11 @@ On the first `agent100 config` run, the program detects that configuration is mi
 .\.venv\Scripts\agent100.exe --version
 .\.venv\Scripts\agent100.exe config
 .\.venv\Scripts\agent100.exe chat
+.\.venv\Scripts\agent100.exe newchat
 .\.venv\Scripts\agent100.exe taskplan "Search for Python logging practices and prepare a study outline"
 ```
+
+`newchat` is the in-progress LangChain/LangGraph entry point. It currently supports in-memory multi-turn chat, terminal streaming, and the `current_time` tool; the existing `chat` command remains unchanged.
 
 Web Search is powered by the GLM search engine, and long-term memory uses GLM Embedding-3 for vectors. Both require a GLM API key (`ZAI_API_KEY`), even when DeepSeek is selected as the chat model. Email requires `QQ_SMTP_USERNAME` and `QQ_SMTP_AUTH_CODE` (an SMTP authorization code, not your mailbox password). Model, search, and embedding requests use your own service account and may incur charges.
 
