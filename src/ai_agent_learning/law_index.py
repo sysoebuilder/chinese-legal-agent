@@ -1,6 +1,7 @@
 """法规标题与正文的 BM25S 磁盘倒排索引。"""
 
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +12,10 @@ import numpy as np
 from ai_agent_learning.paths import get_data_dir
 
 INDEX_DIR = "law-bm25"
+
+# jieba 首次分词时默认向终端输出词典加载进度，会破坏 Rich 的动态显示区。
+# 只保留警告和错误；法规索引本身的异常仍会正常抛出并进入应用日志。
+jieba.setLogLevel(logging.WARNING)
 
 
 def tokenize(text: str) -> list[str]:
