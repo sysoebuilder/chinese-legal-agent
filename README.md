@@ -55,7 +55,7 @@ python -m venv .venv
 
 Web Search 功能基于 GLM 搜索引擎实现，长期记忆使用 GLM Embedding-3 生成向量，两项功能都必须配置 GLM API Key（环境变量名为 `ZAI_API_KEY`）；即使当前对话模型选择 DeepSeek，该配置仍不可省略。邮件工具另需配置 `QQ_SMTP_USERNAME` 和 `QQ_SMTP_AUTH_CODE`，后者是 SMTP 授权码，不是邮箱登录密码。模型、搜索和向量化调用使用你自己的服务账号，可能产生费用。
 
-会话、日志和 Qdrant 记忆库默认保存在本地 `data/`；可用 `LLM_CLI_DATA_DIR` 指定其他目录。输入 `exit` 或 `quit` 时，程序会等待已入队的记忆任务处理完成。不要提交真实 `.env`、个人会话或记忆数据。
+会话、LangGraph checkpoint 和结构化日志统一保存在 `data/langgraph-checkpoints.sqlite`，日志位于其中的 `logs` 表；Qdrant 记忆库也默认位于本地 `data/`。可用 `LLM_CLI_DATA_DIR` 指定其他目录。输入 `exit` 或 `quit` 时，程序会等待已入队的记忆任务处理完成。不要提交真实 `.env`、个人会话或记忆数据。
 
 ### 代码导航
 
@@ -128,7 +128,7 @@ On the first `agent100 config` run, the program detects that configuration is mi
 
 Web Search is powered by the GLM search engine, and long-term memory uses GLM Embedding-3 for vectors. Both require a GLM API key (`ZAI_API_KEY`), even when DeepSeek is selected as the chat model. Email requires `QQ_SMTP_USERNAME` and `QQ_SMTP_AUTH_CODE` (an SMTP authorization code, not your mailbox password). Model, search, and embedding requests use your own service account and may incur charges.
 
-Sessions, logs, and the local Qdrant memory database are stored in `data/` by default. Set `LLM_CLI_DATA_DIR` to override the location. On `exit` or `quit`, the program waits for queued memory jobs to finish. Keep real `.env` files, personal sessions, and memory data out of version control. The current terminal interface is primarily in Chinese.
+Sessions, LangGraph checkpoints, and structured logs share `data/langgraph-checkpoints.sqlite`; logs are stored in its `logs` table. The Qdrant memory database also lives under `data/` by default. Set `LLM_CLI_DATA_DIR` to override the location. On `exit` or `quit`, the program waits for queued memory jobs to finish. Keep real `.env` files, personal sessions, and memory data out of version control. The current terminal interface is primarily in Chinese.
 
 ### Code map and development
 

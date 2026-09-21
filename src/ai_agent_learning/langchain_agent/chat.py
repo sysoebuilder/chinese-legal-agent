@@ -32,7 +32,7 @@ from ai_agent_learning.langchain_agent.session import (
     select_sqlite_session,
 )
 from ai_agent_learning.langchain_agent.tools import TOOL_SPECS
-from ai_agent_learning.logging_config import configure_logging
+from ai_agent_learning.logging_config import configure_logging, shutdown_logging
 from ai_agent_learning.model_config import load_active_model, source_config_path
 from ai_agent_learning.paths import get_data_dir
 from ai_agent_learning.qdrant_server import QdrantServer
@@ -171,15 +171,15 @@ def _review_interrupt(
 
 async def run_new_chat() -> None:
     """运行 LangChain/LangGraph 多轮会话。"""
-    configure_logging()
+    checkpoint_path = get_data_dir() / "langgraph-checkpoints.sqlite"
+    configure_logging(checkpoint_path)
     logger.info("新版会话启动", extra={"event": "newchat.started"})
-    config = load_active_model()
-    load_dotenv(source_config_path(), override=False)
     server = QdrantServer()
     try:
+        config = load_active_model()
+        load_dotenv(source_config_path(), override=False)
         await server.start()
         ui = TerminalUI()
-        checkpoint_path = get_data_dir() / "langgraph-checkpoints.sqlite"
         async with AsyncSqliteSaver.from_conn_string(
             str(checkpoint_path)
         ) as checkpointer:
@@ -303,3 +303,4 @@ async def run_new_chat() -> None:
     finally:
         await server.close()
         logger.info("新版会话资源已关闭", extra={"event": "newchat.closed"})
+        shutdown_logging()
