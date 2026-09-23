@@ -2,12 +2,14 @@
 
 import asyncio
 import logging
+import os
 import time
 from typing import Any
 from uuid import uuid4
 
 from dotenv import load_dotenv
 from langchain_core.messages import (
+    AIMessage,
     AIMessageChunk,
     AnyMessage,
     HumanMessage,
@@ -42,17 +44,29 @@ from ai_agent_learning.ui.terminal import TerminalUI
 logger = logging.getLogger(__name__)
 
 
+def _new_turn_config(session_id: str, trace_id: str) -> RunnableConfig:
+    configurable: dict[str, Any] = {"thread_id": session_id}
+    if os.environ.pop("LEGAL_FAULT_DECIDE_ONCE", None) == "1":
+        configurable["legal_fault"] = {"node": "decide", "mode": "error"}
+    return RunnableConfig(
+        configurable=configurable,
+        metadata={"trace_id": trace_id},
+    )
+
+
 async def stream_agent_turn(
     agent: Any,
-    content: str,
+    content: str | None,
     ui: TerminalUI,
     config: RunnableConfig,
     trace_id: str | None = None,
 ) -> list[AnyMessage]:
     """流式执行一轮 Agent，并返回包含工具往返的完整消息历史。"""
-    agent_input: dict[str, list[AnyMessage]] | Command = {
-        "messages": [HumanMessage(content=content)]
-    }
+    agent_input: dict[str, list[AnyMessage]] | Command | None = (
+        {"messages": [HumanMessage(content=content)]}
+        if content is not None
+        else None
+    )
     latest_messages: list[AnyMessage] | None = None
 
     while True:
@@ -61,6 +75,7 @@ async def stream_agent_turn(
             agent_input,
             config=config,
             stream_mode=["messages", "values"],
+            subgraphs=True,
             version="v2",
         ):
             if part["type"] == "values":
@@ -73,7 +88,7 @@ async def stream_agent_turn(
             if part["type"] != "messages":
                 continue
 
-            message, _metadata = part["data"]
+            message, metadata = part["data"]
             if isinstance(message, AIMessageChunk):
                 for block in message.content_blocks:
                     if block.get("type") != "reasoning":
@@ -85,6 +100,9 @@ async def stream_agent_turn(
                 text = message.text
                 if text:
                     ui.text_delta(text)
+            elif isinstance(message, AIMessage) and metadata.get("langgraph_node") == "refuse":
+                # 拒答是节点生成的固定提示，不经过模型流式调用。
+                ui.text_delta(message.text)
             elif isinstance(message, ToolMessage):
                 # 模型可能在调用工具前输出文字；先提交这一段，再继续下一轮。
                 ui.finish_response()
@@ -93,10 +111,16 @@ async def stream_agent_turn(
         if not pending_interrupts:
             break
 
-        resume_values = {
-            interrupt.id: _review_interrupt(interrupt, ui, config, trace_id)
-            for interrupt in pending_interrupts
-        }
+        resume_values = {}
+        for pending_interrupt in pending_interrupts:
+            if pending_interrupt.id in resume_values:
+                continue
+            resume_values[pending_interrupt.id] = await _review_interrupt(
+                pending_interrupt,
+                ui,
+                config,
+                trace_id,
+            )
         agent_input = Command(resume=resume_values)
 
     if latest_messages is None:
@@ -104,7 +128,38 @@ async def stream_agent_turn(
     return latest_messages
 
 
-def _review_interrupt(
+async def _resume_pending_turn(
+    agent: Any,
+    ui: TerminalUI,
+    session_id: str,
+) -> list[AnyMessage] | None:
+    """同一会话有待执行节点时，从 checkpoint 继续，不添加用户消息。"""
+    trace_id = uuid4().hex
+    turn_config = RunnableConfig(
+        configurable={"thread_id": session_id},
+        metadata={"trace_id": trace_id},
+    )
+    snapshot = await agent.aget_state(turn_config)
+    if not snapshot.next:
+        return None
+    ui.show_notice("检测到未完成的对话，正在从断点继续…")
+    logger.info(
+        "对话轮次从断点继续",
+        extra={
+            "event": "chat.turn.resumed",
+            "session_id": session_id,
+            "trace_id": trace_id,
+            "pending_nodes": list(snapshot.next),
+        },
+    )
+    ui.begin_turn()
+    try:
+        return await stream_agent_turn(agent, None, ui, turn_config, trace_id)
+    finally:
+        ui.close_turn()
+
+
+async def _review_interrupt(
     interrupt: Interrupt,
     ui: TerminalUI,
     config: RunnableConfig,
@@ -114,6 +169,14 @@ def _review_interrupt(
     request = interrupt.value
     if not isinstance(request, dict):
         raise TypeError("工具确认请求格式错误")
+    if request.get("type") == "legal_information_required":
+        question = request.get("question")
+        if not isinstance(question, str) or not question.strip():
+            raise ValueError("法律信息补充请求缺少问题")
+        answer = await asyncio.to_thread(ui.read_follow_up, question.strip())
+        ui.begin_turn()
+        return {"answer": answer.strip()}
+
     actions = request.get("action_requests")
     if not isinstance(actions, list) or not actions:
         raise ValueError("工具确认请求中没有待处理操作")
@@ -210,6 +273,23 @@ async def run_new_chat() -> None:
             )
             try:
                 ui.show_header(config.model, session.name)
+                try:
+                    resumed_messages = await _resume_pending_turn(
+                        agent, ui, session.thread_id
+                    )
+                except Exception as error:
+                    logger.exception(
+                        "启动时断点恢复失败",
+                        extra={
+                            "event": "chat.turn.resume_failed",
+                            "session_id": session.thread_id,
+                            "error_type": type(error).__name__,
+                        },
+                    )
+                    ui.show_error(f"断点恢复失败：{error}")
+                    return
+                if resumed_messages is not None:
+                    await session_store.touch(session)
                 while True:
                     content = await asyncio.to_thread(ui.read_message)
                     if not content:
@@ -230,10 +310,7 @@ async def run_new_chat() -> None:
 
                     trace_id = uuid4().hex
                     started_at = time.perf_counter()
-                    turn_config = RunnableConfig(
-                        configurable={"thread_id": session.thread_id},
-                        metadata={"trace_id": trace_id},
-                    )
+                    turn_config = _new_turn_config(session.thread_id, trace_id)
                     logger.info(
                         "对话轮次开始",
                         extra={
@@ -252,7 +329,7 @@ async def run_new_chat() -> None:
                             turn_config,
                             trace_id,
                         )
-                    except Exception as error:  # noqa: BLE001 -- 单轮失败后允许继续输入。
+                    except Exception as error:
                         logger.exception(
                             "对话轮次失败",
                             extra={
@@ -269,7 +346,24 @@ async def run_new_chat() -> None:
                         )
                         ui.close_turn()
                         ui.show_error(str(error))
-                        continue
+                        try:
+                            recovered_messages = await _resume_pending_turn(
+                                agent, ui, session.thread_id
+                            )
+                        except Exception as resume_error:
+                            logger.exception(
+                                "报错后断点恢复失败",
+                                extra={
+                                    "event": "chat.turn.resume_failed",
+                                    "session_id": session.thread_id,
+                                    "error_type": type(resume_error).__name__,
+                                },
+                            )
+                            ui.show_error(f"断点恢复失败：{resume_error}")
+                            return
+                        if recovered_messages is None:
+                            continue
+                        messages = recovered_messages
                     finally:
                         ui.close_turn()
 

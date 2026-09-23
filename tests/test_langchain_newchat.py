@@ -3,12 +3,16 @@ from io import StringIO
 from types import SimpleNamespace
 
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, ToolMessage
-from langchain_core.runnables import RunnableConfig
+from langchain_core.runnables import RunnableConfig, RunnableLambda
 from pydantic import SecretStr
 from rich.console import Console
 
 from ai_agent_learning.langchain_agent import runtime
-from ai_agent_learning.langchain_agent.chat import stream_agent_turn
+from ai_agent_learning.langchain_agent.chat import (
+    _new_turn_config,
+    _resume_pending_turn,
+    stream_agent_turn,
+)
 from ai_agent_learning.model_config import ModelConfig
 from ai_agent_learning.ui.terminal import TerminalUI
 
@@ -23,7 +27,7 @@ def test_create_new_chat_agent_uses_glm_adapter_and_registers_query_tools(monkey
             return self
 
     fake_model = FakeModel()
-    fake_agent = object()
+    fake_agent = RunnableLambda(lambda state: state)
 
     def fake_chat_glm(**kwargs):
         captured["model_options"] = kwargs
@@ -44,7 +48,7 @@ def test_create_new_chat_agent_uses_glm_adapter_and_registers_query_tools(monkey
 
     result = runtime.create_new_chat_agent(config)
 
-    assert result is fake_agent
+    assert result.name == "agent100_newchat"
     assert captured["model_options"] == {
         "model": "test-model",
         "api_key": "test-key",
@@ -57,7 +61,6 @@ def test_create_new_chat_agent_uses_glm_adapter_and_registers_query_tools(monkey
         "current_time",
         "web_search",
         "search_memory",
-        "search_raws",
         "send_email",
         "run_command",
     ]
@@ -126,10 +129,11 @@ def test_stream_agent_turn_outputs_deltas_and_returns_complete_state():
     ]
 
     class FakeAgent:
-        async def astream(self, input, *, config, stream_mode, version):
+        async def astream(self, input, *, config, stream_mode, subgraphs, version):
             assert input["messages"][0].content == "现在几点"
             assert config["configurable"]["thread_id"] == "test-thread"
             assert stream_mode == ["messages", "values"]
+            assert subgraphs is True
             assert version == "v2"
             yield {
                 "type": "messages",
@@ -187,7 +191,7 @@ def test_stream_agent_turn_outputs_deltas_and_returns_complete_state():
 
 def test_stream_agent_turn_rejects_missing_final_state():
     class EmptyAgent:
-        async def astream(self, input, *, config, stream_mode, version):
+        async def astream(self, input, *, config, stream_mode, subgraphs, version):
             if False:
                 yield SimpleNamespace()
 
@@ -207,3 +211,53 @@ def test_stream_agent_turn_rejects_missing_final_state():
         assert str(error) == "LangChain Agent 没有返回最终状态"
     else:
         raise AssertionError("缺少最终状态时应抛出 RuntimeError")
+
+
+def test_resume_pending_turn_uses_checkpoint_without_new_user_message():
+    final_messages = [HumanMessage(content="原问题"), AIMessage(content="恢复后的回答")]
+
+    class FakeAgent:
+        async def aget_state(self, config):
+            assert config["configurable"]["thread_id"] == "test-thread"
+            return SimpleNamespace(next=("legal_flow",))
+
+        async def astream(self, input, *, config, stream_mode, subgraphs, version):
+            assert input is None
+            assert config["configurable"]["thread_id"] == "test-thread"
+            yield {
+                "type": "values",
+                "data": {"messages": final_messages},
+                "interrupts": (),
+            }
+
+    output = StringIO()
+    ui = TerminalUI(Console(file=output, force_terminal=False))
+    result = asyncio.run(_resume_pending_turn(FakeAgent(), ui, "test-thread"))
+
+    assert result == final_messages
+
+
+def test_resume_pending_turn_skips_completed_checkpoint():
+    class FakeAgent:
+        async def aget_state(self, config):
+            return SimpleNamespace(next=())
+
+        async def astream(self, input, *, config, stream_mode, subgraphs, version):
+            raise AssertionError("已完成的会话不应再次执行")
+            yield
+
+    ui = TerminalUI(Console(file=StringIO(), force_terminal=False))
+    assert asyncio.run(_resume_pending_turn(FakeAgent(), ui, "test-thread")) is None
+
+
+def test_decide_fault_config_is_used_once(monkeypatch):
+    monkeypatch.setenv("LEGAL_FAULT_DECIDE_ONCE", "1")
+
+    first = _new_turn_config("test-thread", "trace-1")
+    second = _new_turn_config("test-thread", "trace-2")
+
+    assert first["configurable"]["legal_fault"] == {
+        "node": "decide",
+        "mode": "error",
+    }
+    assert second["configurable"] == {"thread_id": "test-thread"}

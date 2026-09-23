@@ -51,9 +51,23 @@ class TerminalUI:
         )
 
     def read_message(self) -> str:
+        self._stop_live()
         self.console.print()
         self.console.rule(Text("你", style="bold cyan"), align="left", style="dim")
         return input("› ").strip()
+
+    def read_follow_up(self, question: str) -> str:
+        """暂停动态区域，展示补充问题并等待用户输入。"""
+        self._finish_text()
+        self.console.print(
+            Panel(
+                Markdown(question),
+                title="需要补充的信息",
+                border_style="yellow",
+                padding=(1, 2),
+            )
+        )
+        return self.read_message()
 
     def select_model(self, choices: list[ModelConfig]) -> ModelConfig | None:
         table = Table(title="选择模型提供商", border_style="cyan")

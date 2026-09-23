@@ -28,6 +28,30 @@ class MemorySaveMiddleware(AgentMiddleware):
         super().__init__()
         self.queue = queue
 
+    def enqueue(self, user_content: str, assistant_content: str) -> bool:
+        """把一轮已确定的用户输入和最终回答加入后台队列。"""
+        user_content = user_content.strip()
+        assistant_content = assistant_content.strip()
+        if not user_content or not assistant_content:
+            return False
+        config = get_config()
+        metadata = config.get("metadata") or {}
+        memory_turn = MemoryTurn(
+            user_content=user_content,
+            assistant_content=assistant_content,
+            trace_id=metadata.get("trace_id"),
+        )
+        self.queue.put_nowait(memory_turn)
+        logger.info(
+            "本轮对话已加入记忆整理队列",
+            extra={
+                "event": "memory.turn.queued",
+                "queue_size": self.queue.qsize(),
+                "trace_id": memory_turn.trace_id,
+            },
+        )
+        return True
+
     async def aafter_agent(
         self,
         state: AgentState[Any],
@@ -58,20 +82,5 @@ class MemorySaveMiddleware(AgentMiddleware):
             return None
 
         del runtime
-        config = get_config()
-        metadata = config.get("metadata") or {}
-        memory_turn = MemoryTurn(
-            user_content=user_content,
-            assistant_content=final_answer,
-            trace_id=metadata.get("trace_id"),
-        )
-        self.queue.put_nowait(memory_turn)
-        logger.info(
-            "本轮对话已加入记忆整理队列",
-            extra={
-                "event": "memory.turn.queued",
-                "queue_size": self.queue.qsize(),
-                "trace_id": memory_turn.trace_id,
-            },
-        )
+        self.enqueue(user_content, final_answer)
         return None

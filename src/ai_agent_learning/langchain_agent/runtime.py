@@ -10,11 +10,16 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_deepseek import ChatDeepSeek
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from pydantic import SecretStr
 
 from ai_agent_learning.langchain_agent.approval import build_interrupt_on
 from ai_agent_learning.langchain_agent.glm import ChatGlm
+from ai_agent_learning.langchain_agent.legal import (
+    LegalAgentState,
+    create_legal_graph,
+)
 from ai_agent_learning.langchain_agent.middleware import (
     ToolLoggingMiddleware,
     build_context_middleware,
@@ -29,7 +34,6 @@ SYSTEM_PROMPT = """
 需要知道当前日期、时间或时区时，必须调用 current_time 工具。
 问题涉及实时信息或用户明确要求联网时，调用 web_search。
 需要依赖用户过去提供的信息时，调用 search_memory，不得假装记得未检索到的内容。
-回答中国法律法规问题时，调用 search_raws，并严格遵守该工具说明中的时效与地域规则。
 工具没有返回有效结果时，应明确说明无法取得信息，不得编造工具结果。
 在调用记忆工具后，不需要说明查询了记忆内容，要表现的跟真人一样。
 """.strip()
@@ -71,8 +75,9 @@ def create_new_chat_agent(
     model: BaseChatModel | None = None,
     memory_middleware: MemorySaveMiddleware | None = None,
 ) -> CompiledStateGraph:
-    """创建带上下文总结和高风险工具确认的新版 Agent。"""
+    """创建以法律子图为前置路由的新版 Agent。"""
     model = model or create_langchain_model(config)
+    general_tools = [tool for tool in ALL_TOOLS if tool.name != "search_raws"]
     middleware: list[AgentMiddleware] = [build_context_middleware(model)]
     if memory_middleware is not None:
         middleware.append(memory_middleware)
@@ -86,15 +91,59 @@ def create_new_chat_agent(
     middleware.append(ToolLoggingMiddleware())
     middleware.append(
         HumanInTheLoopMiddleware(
-            interrupt_on=build_interrupt_on(ALL_TOOLS),
+            interrupt_on=build_interrupt_on(general_tools),
             description_prefix="工具执行需要确认",
         )
     )
-    return create_agent(
+    general_agent = create_agent(
         model=model,
-        tools=ALL_TOOLS,
+        tools=general_tools,
         system_prompt=SYSTEM_PROMPT,
         middleware=middleware,
+        state_schema=LegalAgentState,
+        name="general_agent",
+    )
+    legal_graph = create_legal_graph(model)
+    graph = StateGraph(LegalAgentState)
+    graph.add_node("legal_flow", legal_graph)
+    graph.add_node("general_agent", general_agent)
+
+    async def queue_legal_memory(state: LegalAgentState) -> dict[str, object]:
+        case_id = state.get("active_case_id")
+        case = state.get("cases", {}).get(case_id, {}) if case_id else {}
+        final_answer = case.get("final_answer")
+        if memory_middleware is None or not final_answer:
+            return {}
+        user_parts = [case["original_question"], *case.get("user_supplements", [])]
+        memory_middleware.enqueue("\n".join(user_parts), final_answer)
+        return {}
+
+    graph.add_node("queue_legal_memory", queue_legal_memory)
+    graph.add_edge(START, "legal_flow")
+    graph.add_conditional_edges(
+        "legal_flow",
+        _route_after_legal_flow,
+        {
+            "general_agent": "general_agent",
+            "queue_legal_memory": "queue_legal_memory",
+            "end": END,
+        },
+    )
+    graph.add_edge("general_agent", END)
+    graph.add_edge("queue_legal_memory", END)
+    return graph.compile(
         checkpointer=checkpointer or InMemorySaver(),
         name="agent100_newchat",
     )
+
+
+def _route_after_legal_flow(
+    state: LegalAgentState,
+) -> str:
+    case_id = state.get("active_case_id")
+    if case_id is None:
+        return "general_agent"
+    case = state.get("cases", {}).get(case_id, {})
+    if case.get("final_answer"):
+        return "queue_legal_memory"
+    return "end"

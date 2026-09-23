@@ -10,7 +10,7 @@
 agent100 config
 ```
 
-如果 `data/.env` 不存在，程序会进入首次配置：手动选择 GLM 或 DeepSeek，隐藏输入 API Key，然后输入模型名称。模型名称留空时分别使用 `GLM-5.3-flash` 或 `deepseek-v4-flash`；Base URL 使用程序内置的官方地址，不要求用户填写。完成后自动创建 `data/.env` 和 `data/active-model.env`。
+如果 `data/.env` 不存在，程序会进入首次配置：手动选择 GLM 或 DeepSeek，隐藏输入 API Key，然后输入模型名称。模型名称留空时分别使用 `GLM-5.3-flash` 或 `deepseek-flash`；Base URL 使用程序内置的官方地址，不要求用户填写。完成后自动创建 `data/.env` 和 `data/active-model.env`。
 
 ## 2. 选择当前模型
 
@@ -24,7 +24,7 @@ agent100 config
 
 ```dotenv
 MODEL_PROVIDER='deepseek'
-MODEL_NAME='deepseek-v4-flash'
+MODEL_NAME='deepseek-flash'
 MODEL_API_KEY='your_deepseek_key'
 MODEL_BASE_URL='https://api.deepseek.com'
 ```

@@ -17,8 +17,8 @@ TITLE_MAX_LENGTH = 20
 TITLE_PROMPT = """
 根据用户开启本次对话时的第一条输入，生成一个简洁、具体的中文会话标题。
 标题最多 20 个字符。只输出标题本身，不要引号、句号、前缀或解释。
+你只负责生成标题，不需要回答用户的问题。
 """.strip()
-
 
 class SqliteSession(BaseModel):
     """会话目录记录；thread_id 同时用于定位 LangGraph 状态。"""

@@ -8,7 +8,6 @@ from logging.handlers import QueueHandler, QueueListener
 from pathlib import Path
 from typing import Any
 
-
 EXTRA_FIELDS = (
     "event",
     "session_id",
@@ -30,6 +29,7 @@ EXTRA_FIELDS = (
     "error_type",
     "name_length",
     "tool_name",
+    "node_name",
     "tool_call_id",
     "message_count",
     "decision_count",

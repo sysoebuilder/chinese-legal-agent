@@ -12,7 +12,7 @@ from ai_agent_learning.qdrant_config import DEFAULT_QDRANT_URL
 
 PROVIDER_DEFAULTS = {
     "glm": ("GLM-5.3-flash", "https://open.bigmodel.cn/api/paas/v4/"),
-    "deepseek": ("deepseek-v4-flash", "https://api.deepseek.com"),
+    "deepseek": ("deepseek-flash", "https://api.deepseek.com"),
 }
 
 

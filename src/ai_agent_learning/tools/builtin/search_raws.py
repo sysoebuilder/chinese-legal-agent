@@ -86,32 +86,14 @@ async def handler(retrieval_cases: list[dict[str, Any]]) -> dict[str, Any]:
             title_ids = await asyncio.to_thread(
                 index.title_candidates, case["title_keywords"], 50
             )
-            title_rows = (
-                await store.retrieve(
-                    "npc_laws", ids=title_ids, with_payload=True, with_vectors=False
-                )
-                if title_ids
-                else []
-            )
-            by_id = {str(row.id): row for row in title_rows}
-            unique_ids, seen_titles = [], set()
-            for point_id in title_ids:
-                row = by_id.get(point_id)
-                if row is None:
-                    continue
-                payload = row.payload or {}
-                title = str(payload.get("title") or "").strip()
-                if title not in seen_titles:
-                    seen_titles.add(title)
-                    unique_ids.append(point_id)
             lexical = await asyncio.to_thread(
-                index.rerank_content, case["content_keywords"], unique_ids, 10
+                index.rerank_content, case["content_keywords"], title_ids, 5
             )
             semantic = await store.query_points(
                 "npc_laws",
                 query=vector,
                 using="text",
-                limit=10,
+                limit=5,
                 score_threshold=0.6,
                 with_payload=True,
                 search_params=models.SearchParams(exact=False),
