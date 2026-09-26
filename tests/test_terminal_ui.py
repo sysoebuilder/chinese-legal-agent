@@ -61,7 +61,7 @@ def test_long_answer_is_not_expanded_when_stopping_preview(monkeypatch):
     ui = TerminalUI(console)
     answer = "\n\n".join(f"Paragraph {index}" for index in range(20))
     ui.text_delta(answer + "\n\nEND_OF_ANSWER")
-    assert "END_OF_ANSWER" not in output.getvalue()
+    assert "END_OF_ANSWER" in output.getvalue()
     boundary = len(output.getvalue())
     ui.finish_response()
     ui.close_turn()
@@ -137,6 +137,20 @@ def test_long_chinese_reasoning_stays_inside_viewport(terminal):
     rows = ui.console.render_lines(live.renderable)
     assert len(rows) <= 10
     ui.close_turn()
+
+
+def test_long_answer_preview_follows_latest_text(terminal):
+    ui, output = terminal
+    ui.console.size = (30, 8)
+    ui.text_delta("\n".join(f"旧内容 {index}" for index in range(12)))
+    ui.text_delta("\n最新内容")
+    live = FakeLive.instances[-1]
+    preview = render(live.renderable)
+    assert "最新内容" in preview
+    assert "旧内容 0" not in preview
+    ui.finish_response()
+    assert "旧内容 0" in output.getvalue()
+    assert output.getvalue().count("最新内容") == 1
 
 
 def test_redirected_output_streams_text_without_reasoning_or_control_codes():

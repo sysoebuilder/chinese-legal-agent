@@ -4,8 +4,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from ai_agent_learning.tools.builtin import send_email
-from ai_agent_learning.tools.policy import FailureKind, ToolOperationError
+from ai_agent_learning.langchain_agent.tools import send_email
 
 
 @pytest.fixture
@@ -53,9 +52,8 @@ def test_sends_without_attachment(smtp):
 def test_missing_config_never_connects(smtp, monkeypatch):
     _, factory = smtp
     monkeypatch.delenv("QQ_SMTP_AUTH_CODE")
-    with pytest.raises(ToolOperationError) as caught:
+    with pytest.raises(ValueError, match="QQ_SMTP_USERNAME"):
         invoke()
-    assert caught.value.failure.code == "EMAIL_CONFIG_MISSING"
     factory.assert_not_called()
 
 
@@ -66,26 +64,26 @@ def test_invalid_attachment_never_connects(smtp, tmp_path, monkeypatch, oversize
     if oversized:
         monkeypatch.setattr(send_email, "MAX_ATTACHMENT_BYTES", 2)
         path.write_bytes(b"123")
-    with pytest.raises(ToolOperationError):
+    with pytest.raises(ValueError):
         invoke(str(path))
     factory.assert_not_called()
 
 
-@pytest.mark.parametrize("stage, error, code, kind", [
+@pytest.mark.parametrize("stage, error, error_type, message", [
     ("login", smtplib.SMTPAuthenticationError(535, b"test-secret"),
-     "EMAIL_AUTH_FAILED", FailureKind.PERMANENT),
+     ValueError, "认证失败"),
     ("send_message", smtplib.SMTPServerDisconnected("test-secret"),
-     "EMAIL_STATUS_UNKNOWN", FailureKind.UNKNOWN_OUTCOME),
+     RuntimeError, "状态未知"),
     ("send_message", smtplib.SMTPRecipientsRefused({"receiver@example.com": (550, b"no")}),
-     "EMAIL_RECIPIENT_REFUSED", FailureKind.PERMANENT),
+     ValueError, "拒绝"),
 ])
-def test_send_failures_are_classified_and_connection_closed(smtp, stage, error, code, kind):
+def test_send_failures_are_classified_and_connection_closed(
+    smtp, stage, error, error_type, message
+):
     client, _ = smtp
     getattr(client, stage).side_effect = error
-    with pytest.raises(ToolOperationError) as caught:
+    with pytest.raises(error_type, match=message) as caught:
         invoke()
-    assert caught.value.failure.code == code
-    assert caught.value.failure.kind is kind
     assert "test-secret" not in str(caught.value)
     client.close.assert_called_once()
 
@@ -98,7 +96,7 @@ def test_close_failure_does_not_invalidate_accepted_mail(smtp):
 
 def test_header_injection_never_connects(smtp):
     _, factory = smtp
-    with pytest.raises(ToolOperationError):
+    with pytest.raises(ValueError):
         asyncio.run(send_email.handler(
             "receiver@example.com", "Subject\r\nBcc: hidden@example.com", "正文",
         ))

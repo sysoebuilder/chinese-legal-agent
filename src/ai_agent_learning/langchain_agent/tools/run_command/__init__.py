@@ -1,3 +1,5 @@
+"""PowerShell 命令工具及 LangChain 注册。"""
+
 import asyncio
 import base64
 import os
@@ -6,47 +8,29 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from ai_agent_learning.tools.builtin._windows_job import WindowsJob
-from ai_agent_learning.tools.contracts import RiskLevel, ToolSpec
+from langchain_core.tools import StructuredTool
+from pydantic import BaseModel, ConfigDict, Field
+
+from ai_agent_learning.langchain_agent.tools.risk import RiskLevel
+from ai_agent_learning.langchain_agent.tools.run_command.windows_job import WindowsJob
+
+TOOL_DESCRIPTION = (
+    "在指定工作目录中执行 PowerShell 命令。命令可能修改文件或系统状态，有依赖的命令应按顺序执行。返回退出码、标准输出、错误输出和超时"
+    "状态；必须检查 exit_code 和 timed_out 判断命令是否成功。每路输出最多保留 64 KiB。不支持交互输入或后台常驻进程；"
+    "调用结束会清理子进程。超时不撤销已发生的修改。"
+)
+TOOL_METADATA = {
+    "risk_level": RiskLevel.HIGH.value,
+    "has_side_effects": True,
+    "supports_idempotent_retry": False,
+    "manages_own_timeout": True,
+}
+
 
 OUTPUT_LIMIT_BYTES = 64 * 1024
-MAX_TIMEOUT_SECONDS = 300
 
-SPEC = ToolSpec(
-    name="run_command",
-    description="在指定工作目录中执行 PowerShell 命令。命令可能修改文件或系统状态，"
-    "有依赖的命令应按顺序执行。返回退出码、标准输出、错误输出和超时状态；"
-    "必须检查 exit_code 和 timed_out 判断命令是否成功。每路输出最多保留 64 KiB。"
-    "不支持交互输入或后台常驻进程；调用结束会清理子进程。超时不撤销已发生的修改。",
-    risk_level=RiskLevel.HIGH,
-    input_schema={
-        "type": "object",
-        "properties": {
-            "command": {
-                "type": "string",
-                "minLength": 1,
-                "description": "要执行的完整 PowerShell 命令。",
-            },
-            "working_directory": {
-                "type": "string",
-                "minLength": 1,
-                "description": "命令工作目录的绝对路径；工作目录不构成文件访问沙箱。",
-            },
-            "timeout_seconds": {
-                "type": "integer",
-                "minimum": 1,
-                "maximum": MAX_TIMEOUT_SECONDS,
-                "default": 30,
-                "description": "命令执行超时秒数，默认 30 秒。",
-            },
-        },
-        "required": ["command", "working_directory"],
-        "additionalProperties": False,
-    },
-    has_side_effects=False,
-    supports_idempotent_retry=False,
-    manages_own_timeout=True,
-)
+
+MAX_TIMEOUT_SECONDS = 300
 
 
 async def handler(
@@ -101,12 +85,21 @@ async def handler(
     truncated = [False, False]
     timed_out = False
     # shield 确保取消发生在启动过程中时，仍能取得进程并清理。
-    launch = asyncio.create_task(asyncio.create_subprocess_exec(
-        shell, "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", bootstrap,
-        cwd=str(directory), stdin=asyncio.subprocess.PIPE,
-        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-        creationflags=subprocess.CREATE_NO_WINDOW,
-    ))
+    launch = asyncio.create_task(
+        asyncio.create_subprocess_exec(
+            shell,
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            bootstrap,
+            cwd=str(directory),
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            creationflags=subprocess.CREATE_NO_WINDOW,
+        )
+    )
     try:
         try:
             process = await asyncio.shield(launch)
@@ -162,11 +155,30 @@ async def handler(
 
 
 async def _drain(
-    stream: asyncio.StreamReader, buffer: bytearray,
-    truncated: list[bool], index: int,
+    stream: asyncio.StreamReader,
+    buffer: bytearray,
+    truncated: list[bool],
+    index: int,
 ) -> None:
     while chunk := await stream.read(8192):
         remaining = OUTPUT_LIMIT_BYTES - len(buffer)
         buffer.extend(chunk[:remaining])
         if len(chunk) > remaining:
             truncated[index] = True
+
+
+class RunCommandInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    command: str = Field(min_length=1)
+    working_directory: str = Field(min_length=1)
+    timeout_seconds: int = Field(default=30, ge=1, le=MAX_TIMEOUT_SECONDS)
+
+
+run_command_tool = StructuredTool.from_function(
+    coroutine=handler,
+    name="run_command",
+    description=TOOL_DESCRIPTION,
+    args_schema=RunCommandInput,
+    metadata=TOOL_METADATA,
+)

@@ -1,8 +1,9 @@
 from collections.abc import Sequence
 from dataclasses import replace
 from getpass import getpass
-from typing import Protocol
+from typing import Any, Protocol
 
+from langchain_core.tools import BaseTool
 from rich.console import Console, Group
 from rich.live import Live
 from rich.markdown import Markdown
@@ -18,7 +19,6 @@ from ai_agent_learning.model_config import (
     create_model_config,
     source_config_path,
 )
-from ai_agent_learning.tools.contracts import ToolCall, ToolSpec
 
 
 class SessionListItem(Protocol):
@@ -135,13 +135,16 @@ class TerminalUI:
                 return None
             return create_model_config(provider, api_key, model)
 
-    def confirm_tool_call(self, spec: ToolSpec, call: ToolCall, reason: str) -> bool:
+    def confirm_tool_call(
+        self, tool: BaseTool, arguments: dict[str, Any], reason: str
+    ) -> bool:
         # 同步确认在事件循环中依次执行，避免并发工具同时读取终端输入。
         self._stop_live()
         self.console.rule(Text("工具执行确认", style="bold yellow"))
-        self.console.print(Text(f"工具：{spec.name}  风险：{spec.risk_level.value}"))
+        risk_level = (tool.metadata or {}).get("risk_level", "unknown")
+        self.console.print(Text(f"工具：{tool.name}  风险：{risk_level}"))
         self.console.print(Text(reason))
-        for name, value in call.arguments.items():
+        for name, value in arguments.items():
             self.console.print(Text(f"{name}：{value}"))
         try:
             return input("确认执行以上操作？[y/N]: ").strip().lower() in {"y", "yes"}
@@ -166,6 +169,16 @@ class TerminalUI:
 
     def show_notice(self, message: str) -> None:
         self.console.print(Text(message, style="dim"))
+
+    def confirm_resume(self) -> bool:
+        """询问是否继续执行上次未完成的节点。"""
+        self._stop_live()
+        try:
+            return input("检测到未完成的对话，是否从断点恢复？[y/N]: ").strip().lower() in {
+                "y", "yes",
+            }
+        except EOFError:
+            return False
 
     def begin_turn(self) -> None:
         if self._interactive and self._live is None:
@@ -219,8 +232,8 @@ class TerminalUI:
             self.begin_turn()
             if self._live is not None:
                 self._live.update(
-                    self._render_answer(),
-                    refresh=first,
+                    self._render_preview(),
+                    refresh=True,
                 )
         else:
             # 重定向输出无法擦除内容：省略思考，正文仍逐块刷新。
@@ -243,6 +256,19 @@ class TerminalUI:
             Rule(Text(label, style="bold cyan"), align="left", style="dim"),
             Markdown(self._text, code_theme="monokai"),
             Text(""),
+        )
+
+    def _render_preview(self) -> Group:
+        # Rich 的 crop 会保留顶部；长回复改为展示末尾，才能看见新 token。
+        max_lines = max(1, self.console.height - 3)
+        wrapped = Text(self._text).wrap(
+            self.console, max(1, self.console.width - 4), overflow="fold"
+        )
+        if len(wrapped) <= max_lines:
+            return self._render_answer()
+        return Group(
+            Rule(Text("助手", style="bold cyan"), align="left", style="dim"),
+            Text("\n").join(wrapped[-max_lines:]),
         )
 
     def _finish_text(self, *, interrupted: bool = False) -> None:

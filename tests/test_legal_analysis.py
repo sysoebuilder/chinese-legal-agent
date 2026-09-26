@@ -1,7 +1,36 @@
 import asyncio
+import json
+from types import SimpleNamespace
+
+from langchain_core.messages import AIMessage, HumanMessage
 
 from ai_agent_learning.langchain_agent.legal.nodes import LegalNodes
 from ai_agent_learning.langchain_agent.legal.schemas import LegalCaseAnalysisOutput
+
+
+def test_classify_receives_optional_previous_ai_message():
+    nodes = LegalNodes(model=None)
+    seen = []
+
+    async def fake_invoke(schema, system, content, *, stream=False):
+        seen.append(json.loads(content))
+        return SimpleNamespace(case_action="none", case_id=None)
+
+    nodes._invoke_json = fake_invoke
+    asyncio.run(nodes.classify({"messages": [
+        HumanMessage(content="周六加班费怎么算？"),
+        AIMessage(content="要看是否安排补休。"),
+        HumanMessage(content="那没有补休呢？"),
+    ]}))
+    asyncio.run(nodes.classify({"messages": [
+        HumanMessage(content="上一条问题"),
+        HumanMessage(content="这条问题"),
+    ]}))
+
+    assert seen[0]["current_question"] == "那没有补休呢？"
+    assert seen[0]["previous_ai"] == "要看是否安排补休。"
+    assert seen[1]["previous_ai"] == ""
+    assert "previous_turn" not in seen[0]
 
 
 def test_analyze_case_only_updates_facts_and_preserves_query_history():
@@ -17,8 +46,9 @@ def test_analyze_case_only_updates_facts_and_preserves_query_history():
     case["pending_retrieval_cases"] = [previous_query]
     state = {"active_case_id": "case_1", "cases": {"case_1": case}}
 
-    async def fake_invoke(schema, system, content):
+    async def fake_invoke(schema, system, content, *, stream=False):
         assert schema is LegalCaseAnalysisOutput
+        assert stream is True
         assert "只输出 objective_facts" in system
         return LegalCaseAnalysisOutput(objective_facts=["用户周六工作"])
 

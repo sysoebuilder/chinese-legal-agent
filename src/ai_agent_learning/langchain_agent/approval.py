@@ -3,7 +3,7 @@
 from langchain.agents.middleware import InterruptOnConfig
 from langchain_core.tools import BaseTool
 
-from ai_agent_learning.tools.contracts import RiskLevel
+from ai_agent_learning.langchain_agent.tools.risk import RiskLevel
 
 # 修改这里即可调整哪些风险等级需要人工确认。
 CONFIRMATION_RISK_LEVELS: frozenset[RiskLevel] = frozenset()

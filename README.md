@@ -30,6 +30,7 @@ Version **0.5.0** · Python **3.11+** · Command **`agent100`**
 | 上下文管理 | LangChain 摘要中间件在达到阈值后压缩旧消息并保留近期对话 |
 | 长期记忆 | 每轮对话后异步整理记忆，使用 GLM Embedding-3 和 Qdrant 完成检索、去重与更新 |
 | 记忆检索 | 模型在回答需要依赖以往记忆时调用工具，结合全局 `key` 精确查询与向量相似度查询返回相关记忆 |
+| 记忆管理 | 分页查看记忆；按 ID 删除，或修改业务字段并重新向量化；修改和删除均需人工确认 |
 | 工程基础 | 结构化日志、模块化代码、pytest 测试、wheel 与源码发行包构建 |
 
 ### 快速开始
@@ -62,7 +63,7 @@ Web Search 功能基于 GLM 搜索引擎实现，长期记忆使用 GLM Embeddin
 | 路径 | 内容 |
 | --- | --- |
 | `src/ai_agent_learning/langchain_agent/` | LangChain/LangGraph Agent、会话、中间件与工具适配 |
-| `src/ai_agent_learning/tools/` | 工具契约、风险策略与底层 handler |
+| `src/ai_agent_learning/langchain_agent/tools/` | 工具实现、LangChain 注册与风险元数据；`run_command/` 包含 Windows 进程管理 |
 | `src/ai_agent_learning/memory/` | 候选记忆提取、向量化、旧记忆检索、决策及 Qdrant 持久化 |
 | `src/ai_agent_learning/ui/` | 终端展示与工具确认 |
 | `tests/` | LangChain Agent、工具、配置与终端相关测试 |
@@ -103,6 +104,7 @@ If you are hiring Agent developers, please contact me at [1774364027w@gmail.com]
 | Context management | LangChain summarization middleware compacts old messages and retains recent context |
 | Long-term memory | Background processing after each turn with GLM Embedding-3 and Qdrant retrieval, deduplication, and updates |
 | Memory retrieval | Lets the model call a tool when an answer depends on previous memory, combining global exact `key` lookup with vector similarity search |
+| Memory management | Lists memories by page; updates business fields with a new embedding or deletes by ID, with human approval for changes |
 | Engineering foundations | Structured logs, modular code, pytest tests, and wheel/source distribution builds |
 
 ### Quick start
@@ -132,7 +134,7 @@ Sessions, LangGraph checkpoints, and structured logs share `data/langgraph-check
 
 ### Code map and development
 
-`langchain_agent/` contains the LangChain/LangGraph runtime, sessions, middleware, and tool adapters; `tools/` contains shared contracts and handlers; `memory/` handles extraction, embedding, retrieval, decisions, and Qdrant persistence; `ui/` handles terminal interaction. These modules live under `src/ai_agent_learning/`.
+`langchain_agent/` contains the LangChain/LangGraph runtime, sessions, middleware, and registered tools with their implementations; `memory/` handles extraction, embedding, retrieval, decisions, and Qdrant persistence; `ui/` handles terminal interaction. These modules live under `src/ai_agent_learning/`.
 
 `tests/` covers model adapters, agent behavior, tools, runtime, and terminal behavior. `docs/` contains implementation notes, primarily in Chinese.
 

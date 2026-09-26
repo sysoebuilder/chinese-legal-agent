@@ -8,6 +8,7 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.tools import BaseTool
 from langgraph.types import interrupt
+from openai import APIStatusError
 
 from ai_agent_learning.langchain_agent.legal.schemas import (
     LegalAnswerReviewOutput,
@@ -25,6 +26,9 @@ from ai_agent_learning.langchain_agent.tools import search_raws_tool
 from ai_agent_learning.retry import retry_async
 
 MAX_RETRIEVAL_ROUNDS = 50
+MAX_INVALID_RETRIEVAL_REDECISIONS = 2
+MAX_NODE_RETRIES = 1
+RETRYABLE_API_STATUS_CODES = {408, 409, 429, 500, 502, 503, 504}
 
 
 class LegalNodes:
@@ -47,10 +51,10 @@ class LegalNodes:
 
     async def classify(self, state: LegalAgentState) -> dict[str, Any]:
         current_question = self._latest_question(state)
-        try:
-            result = await self._invoke_json(
-                LegalClassificationOutput,
-                """
+        previous_ai = self._previous_ai_message(state)
+        result = await self._invoke_json(
+            LegalClassificationOutput,
+            """
 判断当前输入是否属于中国法律法规问题，并选择所属案件。
 涉及法律权利义务、责任、诉讼、行政处理、合同、劳动、婚姻、刑事或法规适用时为 true。
 普通知识、闲聊、编程和不需要法律判断的问题为 false。
@@ -59,37 +63,32 @@ class LegalNodes:
 新的独立法律问题：case_action=new，case_id=null；不得自行生成 ID，由程序按上述格式生成。
 追问、补充或纠正已有案件：case_action=continue，case_id 必须从输入 cases 的键中原样复制。
 不得改写编号、只输出数字、使用不存在的 ID，或根据格式猜测 ID。
-结合已有案件识别“那怎么办”等省略表达；active_case_id 只是最近案件的参考，不能据此强行归类。
+结合 current_question、最近一次助手回复和已有案件语境，识别“那怎么办”等省略表达，
+判断当前输入是否在延续法律讨论；不要仅凭单个词语或最近一次助手回复强行归类。
+previous_ai 仅提供语境，判断对象始终是 current_question；没有上一轮助手回复时它为空字符串。
+active_case_id 只是最近案件的参考，不能据此强行归类。
 不同事件即使涉及同类法律也应新建案件；不得编造 case_id。只输出规定结构的 JSON。
 """.strip(),
-                json.dumps(
-                    {
-                        "current_question": current_question,
-                        "active_case_id": state.get("active_case_id"),
-                        "cases": {
-                            case_id: {
-                                "original_question": case["original_question"],
-                                "user_supplements": case["user_supplements"],
-                                "objective_facts": case["objective_facts"],
-                            }
-                            for case_id, case in state.get("cases", {}).items()
-                        },
+            json.dumps(
+                {
+                    "current_question": current_question,
+                    "previous_ai": previous_ai,
+                    "active_case_id": state.get("active_case_id"),
+                    "cases": {
+                        case_id: {
+                            "original_question": case["original_question"],
+                            "user_supplements": case["user_supplements"],
+                            "objective_facts": case["objective_facts"],
+                        }
+                        for case_id, case in state.get("cases", {}).items()
                     },
-                    ensure_ascii=False,
-                ),
-            )
-            if result.case_action == "continue" and result.case_id not in state.get("cases", {}):
-                raise ValueError("分类模型选择了不存在的 case_id")
-        except Exception as error:  # noqa: BLE001 -- 分类失败不能绕过法律安全流程。
-            case_id = self._next_case_id(state.get("cases", {}))
-            failed_case = self._new_case(current_question)
-            failed_case["refusal_reason"] = (
-                f"法律问题分类失败：{type(error).__name__}"
-            )
-            return {
-                "active_case_id": case_id,
-                "cases": {**state.get("cases", {}), case_id: failed_case},
-            }
+                },
+                ensure_ascii=False,
+            ),
+            stream=True,
+        )
+        if result.case_action == "continue" and result.case_id not in state.get("cases", {}):
+            raise ValueError("分类模型选择了不存在的 case_id")
         if result.case_action == "none":
             return {"active_case_id": None}
         if result.case_action == "continue":
@@ -106,6 +105,10 @@ class LegalNodes:
             case["decision"] = None
             case["final_answer"] = None
             case["refusal_reason"] = None
+            case["retrieval_feedback"] = None
+            case["invalid_retrieval_count"] = 0
+            case["retry_target"] = None
+            case["retry_count"] = 0
             return {
                 "active_case_id": result.case_id,
                 "cases": {**state["cases"], result.case_id: case},
@@ -119,43 +122,49 @@ class LegalNodes:
 
     async def analyze_case(self, state: LegalAgentState) -> dict[str, Any]:
         case = self._active_case(state)
-        try:
-            result = await self._invoke_json(
-                LegalCaseAnalysisOutput,
-                """
+        result = await self._invoke_json(
+            LegalCaseAnalysisOutput,
+            """
 从用户原话和补充信息中整理中国法律判断所需的完整客观事实。
 不得猜测、补充或预设用户没有陈述的事实和法律结论。
 只输出 objective_facts，不生成检索条件或法律结论。输出严格 JSON。
 """.strip(),
-                json.dumps(
-                    {
-                        "current_question": case["current_question"],
-                        "original_question": case["original_question"],
-                        "user_supplements": case["user_supplements"],
-                    },
-                    ensure_ascii=False,
-                ),
-            )
-        except Exception as error:  # noqa: BLE001 -- 结构化失败进入拒答分支。
-            return self._update_case(
-                state,
-                pending_retrieval_cases=[],
-                refusal_reason=f"法律事实分析失败：{type(error).__name__}",
-            )
+            json.dumps(
+                {
+                    "current_question": case["current_question"],
+                    "original_question": case["original_question"],
+                    "user_supplements": case["user_supplements"],
+                },
+                ensure_ascii=False,
+            ),
+            stream=True,
+        )
         return self._update_case(
             state,
             objective_facts=result.objective_facts,
             pending_retrieval_cases=[],
             decision=None,
+            retrieval_feedback=None,
+            invalid_retrieval_count=0,
+            retry_target=None,
+            retry_count=0,
         )
 
     async def retrieve_laws(self, state: LegalAgentState) -> dict[str, Any]:
         case = self._active_case(state)
         cases = case["pending_retrieval_cases"]
         if not cases:
+            retry_count = case.get("invalid_retrieval_count", 0) + 1
+            if retry_count > MAX_INVALID_RETRIEVAL_REDECISIONS:
+                return self._update_case(
+                    state,
+                    refusal_reason="多次重新决策后仍读取不到有效的检索关键词。",
+                )
             return self._update_case(
                 state,
-                refusal_reason="法律检索缺少有效检索条件，无法提供法律结论。",
+                retrieval_feedback="读取不到有效的检索关键词，请重新决定并填写符合结构的 retrieval_cases。",
+                invalid_retrieval_count=retry_count,
+                refusal_reason=None,
             )
         next_round = case["retrieval_round"] + 1
         if next_round > MAX_RETRIEVAL_ROUNDS:
@@ -166,29 +175,28 @@ class LegalNodes:
         try:
             result = await self.law_tool.ainvoke({"retrieval_cases": cases})
             laws = self._flatten_laws(result)
-        except Exception as error:  # noqa: BLE001 -- 工具异常转为确定的法律拒答出口。
-            return self._update_case(
-                state,
-                retrieval_round=next_round,
-                retrieval_queries=[*case["retrieval_queries"], *cases],
-                pending_retrieval_cases=[],
-                refusal_reason=f"法律数据库查询失败：{type(error).__name__}",
-            )
+        except Exception as error:  # noqa: BLE001 -- 子图根据状态决定是否重试。
+            return self._retry_or_refuse(state, "retrieve_laws", error)
         return self._update_case(
             state,
             retrieval_round=next_round,
             retrieval_queries=[*case["retrieval_queries"], *cases],
             pending_retrieval_cases=[],
             retrieved_laws=self._merge_laws(case["retrieved_laws"], laws),
+            retrieval_feedback=None,
+            invalid_retrieval_count=0,
+            retry_target=None,
+            retry_count=0,
             refusal_reason=None,
         )
 
     async def decide(self, state: LegalAgentState) -> dict[str, Any]:
         case = self._active_case(state)
-        try:
-            result = await self._invoke_json(
-                LegalDecisionOutput,
-                f"""
+        result, retry_update = await self._invoke_json_with_retry_state(
+            state,
+            "decide",
+            LegalDecisionOutput,
+            f"""
 你是法律检索流程的决策模型。当前日期是 {datetime.now(UTC).date().isoformat()}。
 只根据用户原话、客观事实和检索结果决定下一步，不得直接编写最终回答。
 
@@ -201,6 +209,8 @@ action 只能是：
 retrieval_round 为 0 且缺少法律依据时，不得以数据库无结果为由拒答；应选择 retrieve_more。
 如果缺少的用户事实会影响检索条件或核心结论，应先选择 ask_user。
 输入中的 retrieval_query_history 是此前已经使用的争议点及标题、内容关键词。
+若 retrieval_feedback 提示读取不到检索关键词，请重新决定；需要检索时重新填写符合结构的 retrieval_cases。
+若 retry_feedback 存在，说明上一次决策调用失败；请重新独立完成本轮决定。
 首次检索时，先根据客观事实梳理不同争议点及所需的全国性、地方性和程序性依据，
 由你生成检索条件；事实分析节点不会预先生成检索条件。
 如果尚未找到所需法律依据，选择 retrieve_more 时应针对具体缺口从不同角度填写关键词，
@@ -225,17 +235,11 @@ ask_user 或 refuse，不要继续重复检索。
 地方性规定只有在用户地域信息足够时才可选用。失效、尚未生效、时效未知或关键字段缺失的法规，
 不得作为确定结论依据。输出严格 JSON。
 """.strip(),
-                self._decision_context(state),
-            )
-        except Exception as error:  # noqa: BLE001 -- 决策失败必须拒答。
-            return self._update_case(
-                state,
-                decision={
-                    "action": "refuse",
-                    "reason": f"法律流程决策失败：{type(error).__name__}",
-                },
-                usable_laws=[],
-            )
+            self._decision_context(state),
+            stream=True,
+        )
+        if retry_update is not None:
+            return retry_update
         decision = result.model_dump(exclude_none=True)
         if result.action == "retrieve_more" and case["retrieval_round"] >= MAX_RETRIEVAL_ROUNDS:
             decision = {
@@ -263,6 +267,9 @@ ask_user 或 refuse，不要继续重复检索。
                 else []
             ),
             usable_laws=usable_laws,
+            retrieval_feedback=None,
+            retry_target=None,
+            retry_count=0,
         )
 
     async def ask_user(self, state: LegalAgentState) -> dict[str, Any]:
@@ -330,10 +337,11 @@ ask_user 或 refuse，不要继续重复检索。
                 )
             ),
         ]
-        try:
-            review = await self._invoke_json(
-                LegalAnswerReviewOutput,
-                """
+        review, retry_update = await self._invoke_json_with_retry_state(
+            state,
+            "generate_final_answer",
+            LegalAnswerReviewOutput,
+            """
 在最终法律回答展示前检查本轮事实与已选法律依据是否足够。不要输出正文。
 action 只能是：
 - answer：现有事实和 usable_laws 足以支持对用户核心问题的回答。
@@ -345,13 +353,11 @@ reason 说明通过检查的理由或具体缺口。不能把上游已选择最�
 区分关键缺口与一般办理建议；不影响核心回答的材料准备、后续行动建议不必回退。
 不要重复询问用户已经提供的信息，也不要猜测事实或编造未检索到的法律。
 """.strip(),
-                str(messages[-1].content),
-            )
-        except Exception as error:  # noqa: BLE001 -- 检查失败进入拒答分支。
-            return self._update_case(
-                state,
-                refusal_reason=f"最终回答检查失败：{type(error).__name__}",
-            )
+            str(messages[-1].content),
+            stream=True,
+        )
+        if retry_update is not None:
+            return retry_update
         if review.action != "answer":
             if case["retrieval_round"] >= MAX_RETRIEVAL_ROUNDS:
                 return self._update_case(
@@ -369,6 +375,8 @@ reason 说明通过检查的理由或具体缺口。不能把上游已选择最�
                 usable_laws=[],
                 final_answer=None,
                 refusal_reason=None,
+                retry_target=None,
+                retry_count=0,
             )
         messages[0].content += "最终回答前的检查意见：" + review.reason
         answer_parts: list[str] = []
@@ -376,18 +384,20 @@ reason 说明通过检查的理由或具体缺口。不能把上游已选择最�
             async for chunk in self.model.astream(messages):
                 if chunk.text:
                     answer_parts.append(chunk.text)
-        except Exception as error:  # noqa: BLE001 -- 生成失败进入拒答分支。
-            return self._update_case(
-                state,
-                refusal_reason=f"法律回答生成失败：{type(error).__name__}",
-            )
+        except Exception as error:  # noqa: BLE001 -- 子图根据状态决定是否重试。
+            return self._retry_or_refuse(state, "generate_final_answer", error)
         answer = "".join(answer_parts).strip()
         if not answer:
             return self._update_case(
                 state,
                 refusal_reason="模型没有生成有效法律回答。",
             )
-        update = self._update_case(state, final_answer=answer)
+        update = self._update_case(
+            state,
+            final_answer=answer,
+            retry_target=None,
+            retry_count=0,
+        )
         update["messages"] = [AIMessage(content=answer)]
         return update
 
@@ -407,15 +417,83 @@ reason 说明通过检查的理由或具体缺口。不能把上游已选择最�
         update["messages"] = [AIMessage(content=answer)]
         return update
 
-    async def _invoke_json(self, schema: type[Any], system: str, content: str) -> Any:
+    def _retry_or_refuse(
+        self,
+        state: LegalAgentState,
+        node_name: str,
+        error: Exception,
+    ) -> dict[str, Any]:
+        case = self._active_case(state)
+        error_detail = type(error).__name__
+        if isinstance(error, APIStatusError):
+            error_detail += f"（HTTP {error.status_code}）"
+        retryable = not isinstance(error, APIStatusError) or (
+            error.status_code in RETRYABLE_API_STATUS_CODES
+        )
+        retry_count = (
+            case.get("retry_count", 0) + 1
+            if case.get("retry_target") == node_name
+            else 1
+        )
+        if retryable and retry_count <= MAX_NODE_RETRIES:
+            return self._update_case(
+                state,
+                retry_target=node_name,
+                retry_count=retry_count,
+                last_node_error=f"{node_name}：{error_detail}",
+                refusal_reason=None,
+            )
+        return self._update_case(
+            state,
+            retry_target=None,
+            retry_count=0,
+            last_node_error=f"{node_name}：{error_detail}",
+            refusal_reason=f"{node_name} 执行失败：{error_detail}",
+        )
+
+    async def _invoke_json_with_retry_state(
+        self,
+        state: LegalAgentState,
+        node_name: str,
+        schema: type[Any],
+        system: str,
+        content: str,
+        *,
+        stream: bool = False,
+    ) -> tuple[Any, dict[str, Any] | None]:
+        try:
+            if stream:
+                return await self._invoke_json(schema, system, content, stream=True), None
+            return await self._invoke_json(schema, system, content), None
+        except Exception as error:  # noqa: BLE001 -- 子图根据状态决定是否重试。
+            return None, self._retry_or_refuse(state, node_name, error)
+
+    async def _invoke_json(
+        self, schema: type[Any], system: str, content: str, *, stream: bool = False
+    ) -> Any:
         system += (
             "\n\n只输出符合以下 JSON Schema 的 JSON 对象，"
             "遵守必填字段、字段类型和额外字段限制，不要输出 Markdown 代码块：\n"
             + json.dumps(schema.model_json_schema(), ensure_ascii=False)
         )
+        messages = [SystemMessage(content=system), HumanMessage(content=content)]
+        if stream:
+            parts: list[str] = []
+            async for chunk in self.model.astream(
+                messages,
+                config={"tags": ["legal_structured"]},
+                response_format={"type": "json_object"},
+            ):
+                if chunk.text:
+                    parts.append(chunk.text)
+            response_text = "".join(parts).strip()
+            if not response_text:
+                raise ValueError(f"{schema.__name__} 模型响应为空")
+            return schema.model_validate_json(response_text)
+
         async def invoke_model() -> Any:
             return await self.model.ainvoke(
-                [SystemMessage(content=system), HumanMessage(content=content)],
+                messages,
                 stream=False,
                 response_format={"type": "json_object"},
             )
@@ -472,6 +550,12 @@ reason 说明通过检查的理由或具体缺口。不能把上游已选择最�
                 "user_supplements": case["user_supplements"],
                 "objective_facts": case["objective_facts"],
                 "retrieval_round": case["retrieval_round"],
+                "retrieval_feedback": case.get("retrieval_feedback"),
+                "retry_feedback": (
+                    case.get("last_node_error")
+                    if case.get("retry_target") == "decide"
+                    else None
+                ),
                 "retrieval_query_history": [
                     {
                         "issue": query["issue"],
@@ -498,6 +582,36 @@ reason 说明通过检查的理由或具体缺口。不能把上游已选择最�
         )
 
     @staticmethod
+    def _previous_ai_message(state: LegalAgentState) -> str:
+        messages = state.get("messages", [])
+        current_index = next(
+            (
+                index for index in range(len(messages) - 1, -1, -1)
+                if isinstance(messages[index], HumanMessage) and messages[index].text.strip()
+            ),
+            None,
+        )
+        if current_index is None:
+            return ""
+        previous_index = next(
+            (
+                index for index in range(current_index - 1, -1, -1)
+                if isinstance(messages[index], HumanMessage) and messages[index].text.strip()
+            ),
+            None,
+        )
+        if previous_index is None:
+            return ""
+        return next(
+            (
+                message.text.strip()
+                for message in reversed(messages[previous_index + 1:current_index])
+                if isinstance(message, AIMessage) and message.text.strip()
+            ),
+            "",
+        )
+
+    @staticmethod
     def _new_case(question: str) -> LegalCase:
         return {
             "current_question": question,
@@ -506,6 +620,11 @@ reason 说明通过检查的理由或具体缺口。不能把上游已选择最�
             "objective_facts": [],
             "retrieval_round": 0,
             "pending_retrieval_cases": [],
+            "retrieval_feedback": None,
+            "invalid_retrieval_count": 0,
+            "retry_target": None,
+            "retry_count": 0,
+            "last_node_error": None,
             "retrieval_queries": [],
             "retrieved_laws": [],
             "usable_laws": [],

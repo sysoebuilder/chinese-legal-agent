@@ -3,7 +3,7 @@ from io import StringIO
 from types import SimpleNamespace
 
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, ToolMessage
-from langchain_core.runnables import RunnableConfig, RunnableLambda
+from langchain_core.runnables import RunnableConfig
 from pydantic import SecretStr
 from rich.console import Console
 
@@ -15,62 +15,6 @@ from ai_agent_learning.langchain_agent.chat import (
 )
 from ai_agent_learning.model_config import ModelConfig
 from ai_agent_learning.ui.terminal import TerminalUI
-
-
-def test_create_new_chat_agent_uses_glm_adapter_and_registers_query_tools(monkeypatch):
-    captured = {}
-
-    class FakeModel:
-        _llm_type = "fake-chat"
-
-        def with_retry(self):
-            return self
-
-    fake_model = FakeModel()
-    fake_agent = RunnableLambda(lambda state: state)
-
-    def fake_chat_glm(**kwargs):
-        captured["model_options"] = kwargs
-        return fake_model
-
-    def fake_create_agent(**kwargs):
-        captured["agent_options"] = kwargs
-        return fake_agent
-
-    monkeypatch.setattr(runtime, "ChatGlm", fake_chat_glm)
-    monkeypatch.setattr(runtime, "create_agent", fake_create_agent)
-    config = ModelConfig(
-        provider="glm",
-        model="test-model",
-        api_key="test-key",
-        base_url="https://model.test/v1/",
-    )
-
-    result = runtime.create_new_chat_agent(config)
-
-    assert result.name == "agent100_newchat"
-    assert captured["model_options"] == {
-        "model": "test-model",
-        "api_key": "test-key",
-        "api_base": "https://model.test/v1/chat/completions",
-        "streaming": True,
-        "thinking": "enabled",
-    }
-    assert captured["agent_options"]["model"] is fake_model
-    assert [tool.name for tool in captured["agent_options"]["tools"]] == [
-        "current_time",
-        "web_search",
-        "search_memory",
-        "send_email",
-        "run_command",
-    ]
-    middleware = captured["agent_options"]["middleware"]
-    assert len(middleware) == 4
-    assert middleware[0].trigger == ("tokens", 102400)
-    assert middleware[0].keep == ("messages", 6)
-    assert middleware[1].max_retries == 2
-    assert middleware[1].retry_on is runtime.is_retryable_error
-    assert set(middleware[3].interrupt_on) == {"send_email"}
 
 
 def test_create_langchain_model_uses_deepseek_adapter(monkeypatch):
@@ -189,6 +133,65 @@ def test_stream_agent_turn_outputs_deltas_and_returns_complete_state():
     assert output.getvalue() == "助手: 现在是14:30。\n"
 
 
+def test_stream_agent_turn_shows_structured_reasoning_without_json():
+    final_messages = [HumanMessage(content="加班费怎么算？"), AIMessage(content="请补充工资。")]
+
+    class FakeAgent:
+        async def astream(self, input, *, config, stream_mode, subgraphs, version):
+            yield {
+                "type": "messages",
+                "data": (
+                    AIMessageChunk(content=[{"type": "reasoning", "reasoning": "先核对工资。"}]),
+                    {"langgraph_node": "classify", "tags": ["legal_structured"]},
+                ),
+            }
+            yield {
+                "type": "messages",
+                "data": (
+                    AIMessageChunk(content='{"action":"ask_user"}'),
+                    {"langgraph_node": "classify", "tags": ["legal_structured"]},
+                ),
+            }
+            yield {
+                "type": "messages",
+                "data": (
+                    AIMessageChunk(content="请补充工资。"),
+                    {"langgraph_node": "generate_final_answer"},
+                ),
+            }
+            yield {
+                "type": "values",
+                "data": {"messages": final_messages},
+                "interrupts": (),
+            }
+
+    class RecordingUI(TerminalUI):
+        def __init__(self):
+            super().__init__(Console(file=StringIO(), force_terminal=False))
+            self.reasoning_parts = []
+            self.text_parts = []
+
+        def reasoning_delta(self, text):
+            self.reasoning_parts.append(text)
+
+        def text_delta(self, text):
+            self.text_parts.append(text)
+
+    ui = RecordingUI()
+    result = asyncio.run(
+        stream_agent_turn(
+            FakeAgent(),
+            "加班费怎么算？",
+            ui,
+            RunnableConfig(configurable={"thread_id": "test-thread"}),
+        )
+    )
+
+    assert result == final_messages
+    assert ui.reasoning_parts == ["先核对工资。"]
+    assert ui.text_parts == ["请补充工资。"]
+
+
 def test_stream_agent_turn_rejects_missing_final_state():
     class EmptyAgent:
         async def astream(self, input, *, config, stream_mode, subgraphs, version):
@@ -248,6 +251,20 @@ def test_resume_pending_turn_skips_completed_checkpoint():
 
     ui = TerminalUI(Console(file=StringIO(), force_terminal=False))
     assert asyncio.run(_resume_pending_turn(FakeAgent(), ui, "test-thread")) is None
+
+
+def test_resume_pending_turn_can_be_declined(monkeypatch):
+    class FakeAgent:
+        async def aget_state(self, config):
+            return SimpleNamespace(next=("general_agent",))
+
+        async def astream(self, input, *, config, stream_mode, subgraphs, version):
+            raise AssertionError("用户跳过恢复后不应执行断点")
+            yield
+
+    ui = TerminalUI(Console(file=StringIO(), force_terminal=False))
+    monkeypatch.setattr(ui, "confirm_resume", lambda: False)
+    assert asyncio.run(_resume_pending_turn(FakeAgent(), ui, "test-thread", confirm=True)) is None
 
 
 def test_decide_fault_config_is_used_once(monkeypatch):

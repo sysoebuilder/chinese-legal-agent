@@ -18,6 +18,7 @@ from langchain_core.messages import (
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.types import Command, Interrupt
+from openai import APIStatusError
 
 from ai_agent_learning.langchain_agent.memory import MemoryWorker
 from ai_agent_learning.langchain_agent.middleware.memory import (
@@ -33,15 +34,22 @@ from ai_agent_learning.langchain_agent.session import (
     create_session_name,
     select_sqlite_session,
 )
-from ai_agent_learning.langchain_agent.tools import TOOL_SPECS
+from ai_agent_learning.langchain_agent.tools import TOOL_BY_NAME
 from ai_agent_learning.logging_config import configure_logging, shutdown_logging
 from ai_agent_learning.model_config import load_active_model, source_config_path
 from ai_agent_learning.paths import get_data_dir
 from ai_agent_learning.qdrant_server import QdrantServer
-from ai_agent_learning.tools.contracts import ToolCall
 from ai_agent_learning.ui.terminal import TerminalUI
 
 logger = logging.getLogger(__name__)
+
+RETRYABLE_API_STATUS_CODES = {408, 409, 429, 500, 502, 503, 504}
+
+
+def _is_nonrecoverable_api_error(error: Exception) -> bool:
+    return isinstance(error, APIStatusError) and (
+        error.status_code not in RETRYABLE_API_STATUS_CODES
+    )
 
 
 def _new_turn_config(session_id: str, trace_id: str) -> RunnableConfig:
@@ -98,7 +106,7 @@ async def stream_agent_turn(
                         ui.reasoning_delta(reasoning)
 
                 text = message.text
-                if text:
+                if text and "legal_structured" not in metadata.get("tags", []):
                     ui.text_delta(text)
             elif isinstance(message, AIMessage) and metadata.get("langgraph_node") == "refuse":
                 # 拒答是节点生成的固定提示，不经过模型流式调用。
@@ -132,6 +140,8 @@ async def _resume_pending_turn(
     agent: Any,
     ui: TerminalUI,
     session_id: str,
+    *,
+    confirm: bool = False,
 ) -> list[AnyMessage] | None:
     """同一会话有待执行节点时，从 checkpoint 继续，不添加用户消息。"""
     trace_id = uuid4().hex
@@ -141,6 +151,9 @@ async def _resume_pending_turn(
     )
     snapshot = await agent.aget_state(turn_config)
     if not snapshot.next:
+        return None
+    if confirm and not await asyncio.to_thread(ui.confirm_resume):
+        ui.show_notice("已跳过断点恢复，可以输入新消息继续对话。")
         return None
     ui.show_notice("检测到未完成的对话，正在从断点继续…")
     logger.info(
@@ -192,7 +205,7 @@ async def _review_interrupt(
         if not isinstance(name, str) or not isinstance(arguments, dict):
             raise TypeError("待确认工具调用缺少名称或参数")
         try:
-            spec = TOOL_SPECS[name]
+            tool = TOOL_BY_NAME[name]
         except KeyError:
             raise ValueError(f"待确认工具未注册：{name}") from None
 
@@ -207,8 +220,8 @@ async def _review_interrupt(
             extra={"event": "tool.approval.requested", **log_fields},
         )
         approved = ui.confirm_tool_call(
-            spec,
-            ToolCall(id=interrupt.id, name=name, arguments=arguments),
+            tool,
+            arguments,
             description if isinstance(description, str) else "模型请求执行该工具。",
         )
         logger.info(
@@ -275,7 +288,7 @@ async def run_new_chat() -> None:
                 ui.show_header(config.model, session.name)
                 try:
                     resumed_messages = await _resume_pending_turn(
-                        agent, ui, session.thread_id
+                        agent, ui, session.thread_id, confirm=True
                     )
                 except Exception as error:
                     logger.exception(
@@ -346,9 +359,12 @@ async def run_new_chat() -> None:
                         )
                         ui.close_turn()
                         ui.show_error(str(error))
+                        if _is_nonrecoverable_api_error(error):
+                            ui.show_notice("API 错误需要先修正账号或请求；当前 checkpoint 已保留。")
+                            return
                         try:
                             recovered_messages = await _resume_pending_turn(
-                                agent, ui, session.thread_id
+                                agent, ui, session.thread_id, confirm=True
                             )
                         except Exception as resume_error:
                             logger.exception(

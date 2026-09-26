@@ -104,12 +104,13 @@ def create_legal_graph(
     graph.add_conditional_edges(
         "retrieve_laws",
         _route_retrieval,
-        {"decide": "decide", "refuse": "refuse"},
+        {"decide": "decide", "retry": "retrieve_laws", "refuse": "refuse"},
     )
     graph.add_conditional_edges(
         "decide",
         _route_decision,
         {
+            "retry": "decide",
             "ask_user": "ask_user",
             "retrieve_more": "retrieve_laws",
             "final_answer": "generate_final_answer",
@@ -126,6 +127,7 @@ def create_legal_graph(
         _route_final_answer,
         {
             "end": END,
+            "retry": "generate_final_answer",
             "ask_user": "ask_user",
             "retrieve_more": "retrieve_laws",
             "refuse": "refuse",
@@ -145,8 +147,11 @@ def _route_classification(
     return "legal"
 
 
-def _route_retrieval(state: LegalAgentState) -> Literal["decide", "refuse"]:
-    return "refuse" if _active_case(state).get("refusal_reason") else "decide"
+def _route_retrieval(state: LegalAgentState) -> Literal["decide", "retry", "refuse"]:
+    case = _active_case(state)
+    if case.get("refusal_reason"):
+        return "refuse"
+    return "retry" if case.get("retry_target") == "retrieve_laws" else "decide"
 
 
 def _route_analysis(state: LegalAgentState) -> Literal["decide", "refuse"]:
@@ -154,7 +159,12 @@ def _route_analysis(state: LegalAgentState) -> Literal["decide", "refuse"]:
 
 
 def _route_decision(state: LegalAgentState) -> str:
-    decision = _active_case(state).get("decision")
+    case = _active_case(state)
+    if case.get("refusal_reason"):
+        return "refuse"
+    if case.get("retry_target") == "decide":
+        return "retry"
+    decision = case.get("decision")
     return str(decision.get("action") or "refuse") if decision else "refuse"
 
 
@@ -164,10 +174,12 @@ def _route_after_user(state: LegalAgentState) -> Literal["analyze_case", "refuse
 
 def _route_final_answer(
     state: LegalAgentState,
-) -> Literal["end", "ask_user", "retrieve_more", "refuse"]:
+) -> Literal["end", "retry", "ask_user", "retrieve_more", "refuse"]:
     case = _active_case(state)
     if case.get("refusal_reason"):
         return "refuse"
+    if case.get("retry_target") == "generate_final_answer":
+        return "retry"
     if case.get("final_answer"):
         return "end"
     decision = case.get("decision")

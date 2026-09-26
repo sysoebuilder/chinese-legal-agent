@@ -242,6 +242,40 @@ class QdrantMemoryStore:
         )
         return [self._memory_from_payload(record.payload) for record in records]
 
+    async def list_memories(
+        self,
+        *,
+        limit: int = 20,
+        cursor: str | None = None,
+        status: MemoryStatus | None = None,
+    ) -> tuple[list[StoredMemory], str | None]:
+        """只读分页浏览现有记忆；不创建或更新 Qdrant 集合。"""
+        if not 1 <= limit <= 50:
+            raise ValueError("limit 必须在 1 到 50 之间")
+        if cursor is not None and not cursor.strip():
+            raise ValueError("cursor 不能为空字符串")
+
+        scroll_filter = None
+        if status is not None:
+            scroll_filter = models.Filter(
+                must=[self._match_condition("status", status.value)]
+            )
+        offset: int | str | None = cursor
+        if cursor is not None and cursor.isdecimal():
+            offset = int(cursor)
+        records, next_offset = await self._client.scroll(
+            collection_name=self._collection_name,
+            scroll_filter=scroll_filter,
+            limit=limit,
+            offset=offset,
+            with_payload=True,
+            with_vectors=False,
+        )
+        return (
+            [self._memory_from_payload(record.payload) for record in records],
+            str(next_offset) if next_offset is not None else None,
+        )
+
     async def set_status(
         self,
         memory_id: str,
@@ -289,11 +323,13 @@ class QdrantMemoryStore:
         """永久删除一条记忆；返回该记忆原先是否存在。"""
         if await self.get(memory_id) is None:
             return False
-        await self._client.delete(
+        result = await self._client.delete(
             collection_name=self._collection_name,
             points_selector=models.PointIdsList(points=[memory_id]),
             wait=True,
         )
+        if result.status is not models.UpdateStatus.COMPLETED:
+            raise RuntimeError(f"记忆删除未确认完成：{result.status.value}")
         return True
 
     async def count(
