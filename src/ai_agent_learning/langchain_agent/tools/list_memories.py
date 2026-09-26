@@ -43,9 +43,9 @@ async def handler(
 class ListMemoriesInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    limit: int = Field(default=20, ge=1, le=50)
-    cursor: str | None = Field(default=None, min_length=1)
-    status: Literal["active", "superseded", "expired"] | None = None
+    limit: int = Field(default=20, ge=1, le=50, description="本页最多返回的记忆条数，范围 1 至 50，默认 20。")
+    cursor: str | None = Field(default=None, min_length=1, description="上一页返回的 next_cursor；首次查询时省略。")
+    status: Literal["active", "superseded", "expired"] | None = Field(default=None, description="可选状态过滤：active 为有效，superseded 为已替代，expired 为已过期；省略时包含全部状态。")
 
 
 list_memories_tool = StructuredTool.from_function(

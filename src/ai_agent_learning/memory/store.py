@@ -195,7 +195,7 @@ class QdrantMemoryStore:
         response = await self._client.query_points(
             collection_name=self._collection_name,
             query=self._validate_vector(vector),
-            search_params=models.SearchParams(exact=False, hnsw_ef=128),
+            search_params=models.SearchParams(exact=True),
             query_filter=self._build_filter(
                 scope=scope,
                 memory_type=memory_type,

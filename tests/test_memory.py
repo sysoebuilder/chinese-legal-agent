@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
+from ai_agent_learning.memory.store import QdrantMemoryStore
 from ai_agent_learning.memory import (
     MemoryCandidate,
     MemoryDecisionMaker,
@@ -34,6 +35,24 @@ def stored_memory(memory_id: str, candidate: MemoryCandidate) -> StoredMemory:
         updated_at=now,
         last_confirmed_at=now,
     )
+
+
+def test_memory_search_uses_exact_vector_query() -> None:
+    store = QdrantMemoryStore(vector_size=1)
+    store.initialize = AsyncMock()
+    store._client.query_points = AsyncMock(return_value=SimpleNamespace(points=[]))
+
+    async def run() -> None:
+        try:
+            assert await store.search([1.0], limit=50, score_threshold=0.6) == []
+            kwargs = store._client.query_points.await_args.kwargs
+            assert kwargs["search_params"].exact is True
+            assert kwargs["limit"] == 50
+            assert kwargs["score_threshold"] == 0.6
+        finally:
+            await store.close()
+
+    asyncio.run(run())
 
 
 def test_decision_maker_validates_and_orders_batch_results() -> None:

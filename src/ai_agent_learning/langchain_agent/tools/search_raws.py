@@ -10,6 +10,7 @@ from qdrant_client import AsyncQdrantClient, models
 
 from ai_agent_learning.langchain_agent.tools.risk import RiskLevel
 from ai_agent_learning.law_index import LawBm25Index
+from ai_agent_learning.reranker import load_reranker, rerank_laws
 from ai_agent_learning.memory.embedding import GlmEmbeddingClient
 from ai_agent_learning.qdrant_config import DEFAULT_QDRANT_URL
 
@@ -39,19 +40,19 @@ async def handler(retrieval_cases: list[dict[str, Any]]) -> dict[str, Any]:
         vectors = await embedding.embed(
             [case["case_facts"] for case in retrieval_cases]
         )
-        output = []
-        for case, vector in zip(retrieval_cases, vectors, strict=True):
+        await asyncio.to_thread(load_reranker)
+        async def search_case(case: dict[str, Any], vector: list[float]) -> dict[str, Any]:
             title_ids = await asyncio.to_thread(
-                index.title_candidates, case["title_keywords"], 50
+                index.title_candidates, case["title_keywords"], 100
             )
             lexical = await asyncio.to_thread(
-                index.rerank_content, case["content_keywords"], title_ids, 5
+                index.rerank_content, case["content_keywords"], title_ids, 50
             )
             semantic = await store.query_points(
                 "npc_laws",
                 query=vector,
                 using="text",
-                limit=5,
+                limit=50,
                 score_threshold=0.6,
                 with_payload=True,
                 search_params=models.SearchParams(exact=False),
@@ -87,7 +88,12 @@ async def handler(retrieval_cases: list[dict[str, Any]]) -> dict[str, Any]:
                     },
                 )
                 item["vector_score"] = point.score
-            output.append({"issue": case["issue"], "laws": list(merged.values())})
+            laws = await asyncio.to_thread(rerank_laws, case["case_facts"], list(merged.values()))
+            return {"issue": case["issue"], "laws": laws}
+
+        output = await asyncio.gather(
+            *(search_case(case, vector) for case, vector in zip(retrieval_cases, vectors, strict=True))
+        )
         return {"results": output}
     finally:
         await store.close()
@@ -97,16 +103,26 @@ async def handler(retrieval_cases: list[dict[str, Any]]) -> dict[str, Any]:
 class RetrievalCase(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    issue: str = Field(min_length=1)
-    title_keywords: list[Annotated[str, Field(min_length=1)]]
-    content_keywords: list[Annotated[str, Field(min_length=1)]] = Field(min_length=1)
-    case_facts: str = Field(min_length=1)
+    issue: str = Field(min_length=1, description="该条检索对应的独立法律争议点，简短概括。")
+    title_keywords: list[Annotated[str, Field(min_length=1)]] = Field(
+        description="可能适用的法规名称或标题关键词，用于 BM25S 标题召回；不确定法规名称时可填空数组。"
+    )
+    content_keywords: list[Annotated[str, Field(min_length=1)]] = Field(
+        min_length=1,
+        description="法条正文中的中性法律概念、行为或条件关键词，用于筛选标题召回结果；至少一项。",
+    )
+    case_facts: str = Field(
+        min_length=1,
+        description="与该争议点有关的客观案情和待解决问题，用于向量检索与最终重排；不得预设法律结论。",
+    )
 
 
 class SearchRawsInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    retrieval_cases: list[RetrievalCase] = Field(min_length=1, max_length=5)
+    retrieval_cases: list[RetrievalCase] = Field(
+        min_length=1, max_length=5, description="本次要并行检索的 1 至 5 个不同法律争议点。"
+    )
 
 
 async def search_raws(retrieval_cases: list[RetrievalCase]) -> dict[str, Any]:

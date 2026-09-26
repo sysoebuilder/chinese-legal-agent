@@ -54,6 +54,22 @@ python -m venv .venv
 
 `newchat` 是当前唯一的聊天入口，提供多轮持久化会话、流式终端输出、工具审批、上下文摘要与异步记忆整理。
 
+法律检索另有独立的 stdio MCP Server，可供 MCP Host 启动并发现 `search_raws` 工具：
+
+```powershell
+.\.venv\Scripts\python.exe -m ai_agent_learning.mcp_server
+```
+
+要让其他计算机通过 IP 和端口连接，可启动 Streamable HTTP：
+
+```powershell
+.\.venv\Scripts\python.exe -m ai_agent_learning.mcp_server --http --host 0.0.0.0 --port 8000
+```
+
+远端 MCP 地址为 `http://<公网 IP>:8000/mcp`。若本机在路由器后面，还需要将公网端口转发至这台计算机，并允许该端口通过主机防火墙；HTTP 模式目前不设鉴权。
+
+它暂时复用当前项目的 `data/law-bm25` 索引、Qdrant `npc_laws` 集合和 `data/.env` 中的 `ZAI_API_KEY`；默认连接 `http://127.0.0.1:6333`，也可用 `QDRANT_URL`、`LLM_CLI_DATA_DIR` 覆盖。Qdrant 服务需要已经运行；MCP Server 不会另外启动 Qdrant。原有 LangChain 法律检索工具仍可使用。
+
 Web Search 功能基于 GLM 搜索引擎实现，长期记忆使用 GLM Embedding-3 生成向量，两项功能都必须配置 GLM API Key（环境变量名为 `ZAI_API_KEY`）；即使当前对话模型选择 DeepSeek，该配置仍不可省略。邮件工具另需配置 `QQ_SMTP_USERNAME` 和 `QQ_SMTP_AUTH_CODE`，后者是 SMTP 授权码，不是邮箱登录密码。模型、搜索和向量化调用使用你自己的服务账号，可能产生费用。
 
 会话、LangGraph checkpoint 和结构化日志统一保存在 `data/langgraph-checkpoints.sqlite`，日志位于其中的 `logs` 表；Qdrant 记忆库也默认位于本地 `data/`。可用 `LLM_CLI_DATA_DIR` 指定其他目录。输入 `exit` 或 `quit` 时，程序会等待已入队的记忆任务处理完成。不要提交真实 `.env`、个人会话或记忆数据。
@@ -64,6 +80,7 @@ Web Search 功能基于 GLM 搜索引擎实现，长期记忆使用 GLM Embeddin
 | --- | --- |
 | `src/ai_agent_learning/langchain_agent/` | LangChain/LangGraph Agent、会话、中间件与工具适配 |
 | `src/ai_agent_learning/langchain_agent/tools/` | 工具实现、LangChain 注册与风险元数据；`run_command/` 包含 Windows 进程管理 |
+| `src/ai_agent_learning/mcp_server/` | 独立 stdio MCP Server 与法律检索工具 |
 | `src/ai_agent_learning/memory/` | 候选记忆提取、向量化、旧记忆检索、决策及 Qdrant 持久化 |
 | `src/ai_agent_learning/ui/` | 终端展示与工具确认 |
 | `tests/` | LangChain Agent、工具、配置与终端相关测试 |

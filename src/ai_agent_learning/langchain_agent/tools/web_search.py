@@ -99,8 +99,8 @@ class WebSearchClient:
 class WebSearchInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    query: str = Field(min_length=1, max_length=70, pattern=r"\S")
-    count: int = Field(default=5, ge=1, le=50)
+    query: str = Field(min_length=1, max_length=70, pattern=r"\S", description="网页搜索词，最多 70 个字符；使用能定位问题的关键词。")
+    count: int = Field(default=5, ge=1, le=50, description="最多返回多少条搜索结果，范围 1 至 50，默认 5。")
 
 
 web_search_tool = StructuredTool.from_function(

@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 
 from ai_agent_learning.paths import get_data_dir
 from ai_agent_learning.qdrant_server import QdrantServer
-from ai_agent_learning.tools.builtin.search_raws import handler
+from ai_agent_learning.langchain_agent.tools.search_raws import handler
 
 
 def load_cases(path: Path) -> list[dict[str, Any]]:
@@ -76,9 +76,11 @@ async def evaluate(cases: list[dict[str, Any]], batch_size: int) -> dict[str, An
                     "retrieved_count": len(retrieved),
                     "first_relevant_rank": first_rank,
                     "recall_at_1": recall_at_k(expected, retrieved, 1),
+                    "recall_at_2": recall_at_k(expected, retrieved, 2),
+                    "recall_at_3": recall_at_k(expected, retrieved, 3),
+                    "recall_at_4": recall_at_k(expected, retrieved, 4),
                     "recall_at_5": recall_at_k(expected, retrieved, 5),
-                    "recall_at_10": recall_at_k(expected, retrieved, 10),
-                    "top_10": [list(item) for item in retrieved[:10]],
+                    "top_5": [list(item) for item in retrieved[:5]],
                     "batch_latency_ms": round(batch_latency_ms, 2),
                 }
             )
@@ -90,8 +92,10 @@ async def evaluate(cases: list[dict[str, Any]], batch_size: int) -> dict[str, An
         "summary": {
             "cases": count,
             "recall_at_1": sum(row["recall_at_1"] for row in rows) / count,
+            "recall_at_2": sum(row["recall_at_2"] for row in rows) / count,
+            "recall_at_3": sum(row["recall_at_3"] for row in rows) / count,
+            "recall_at_4": sum(row["recall_at_4"] for row in rows) / count,
             "recall_at_5": sum(row["recall_at_5"] for row in rows) / count,
-            "recall_at_10": sum(row["recall_at_10"] for row in rows) / count,
             "mrr": sum(
                 1 / row["first_relevant_rank"]
                 if row["first_relevant_rank"] is not None

@@ -13,7 +13,7 @@ from ai_agent_learning.memory.store import QdrantMemoryStore
 class DeleteMemoryInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    memory_ids: list[str] = Field(min_length=1)
+    memory_ids: list[str] = Field(min_length=1, description="要永久删除的记忆 ID 列表；使用已读取记录中的真实 ID，至少一条。")
 
 
 async def handler(memory_ids: list[str]) -> dict[str, Any]:

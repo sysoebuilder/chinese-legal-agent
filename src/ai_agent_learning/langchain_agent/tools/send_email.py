@@ -142,10 +142,10 @@ def _send_email(
 class SendEmailInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    to: str = Field(min_length=1)
-    subject: str = Field(min_length=1)
-    body: str = Field(min_length=1)
-    attachment_path: str | None = Field(default=None, min_length=1)
+    to: str = Field(min_length=1, description="收件人的电子邮箱地址。")
+    subject: str = Field(min_length=1, description="邮件主题。")
+    body: str = Field(min_length=1, description="邮件正文，使用纯文本。")
+    attachment_path: str | None = Field(default=None, min_length=1, description="可选附件的本地文件路径；没有附件时省略。")
 
 
 send_email_tool = StructuredTool.from_function(

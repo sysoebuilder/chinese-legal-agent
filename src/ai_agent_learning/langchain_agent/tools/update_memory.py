@@ -26,28 +26,28 @@ class MemoryChanges(BaseModel):
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
-    content: str | None = Field(default=None, min_length=1)
-    type: MemoryType | None = None
-    key: str | None = Field(default=None, min_length=1, pattern=r"^[a-z][a-z0-9_]*$")
-    scope: str | None = Field(default=None, min_length=1)
-    importance: float | None = Field(default=None, ge=0, le=1)
-    confidence: float | None = Field(default=None, ge=0, le=1)
-    temporal_type: TemporalType | None = None
-    status: MemoryStatus | None = None
-    evidence: str | None = Field(default=None, min_length=1)
+    content: str | None = Field(default=None, min_length=1, description="新的记忆内容；省略时保持原内容。")
+    type: MemoryType | None = Field(default=None, description="新的记忆类型；省略时保持原类型。")
+    key: str | None = Field(default=None, min_length=1, pattern=r"^[a-z][a-z0-9_]*$", description="新的记忆键名，只能使用小写字母、数字和下划线，且以字母开头。")
+    scope: str | None = Field(default=None, min_length=1, description="新的适用范围；省略时保持原范围。")
+    importance: float | None = Field(default=None, ge=0, le=1, description="新的重要程度，0 至 1。")
+    confidence: float | None = Field(default=None, ge=0, le=1, description="新的可信程度，0 至 1。")
+    temporal_type: TemporalType | None = Field(default=None, description="新的时间属性；省略时保持原值。")
+    status: MemoryStatus | None = Field(default=None, description="新的记忆状态；省略时保持原状态。")
+    evidence: str | None = Field(default=None, min_length=1, description="支持这条记忆的依据；省略时保持原依据。")
 
 
 class MemoryUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    memory_id: str = Field(min_length=1)
-    changes: MemoryChanges
+    memory_id: str = Field(min_length=1, description="要修改的现有记忆 ID，使用已读取记录中的真实 ID。")
+    changes: MemoryChanges = Field(description="要修改的业务字段；至少填写一项，未填写的字段保持原值。")
 
 
 class UpdateMemoryInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    updates: list[MemoryUpdate] = Field(min_length=1)
+    updates: list[MemoryUpdate] = Field(min_length=1, description="逐条修改记忆的请求列表，至少一条。")
 
 
 async def handler(

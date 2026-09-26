@@ -11,6 +11,7 @@ build/
 dist/
 htmlcov/
 /data/
+/models/
 /laws/npc-law-vectors.zip
 /laws/npc-law-vectors.zip.sha256
 /src/data/

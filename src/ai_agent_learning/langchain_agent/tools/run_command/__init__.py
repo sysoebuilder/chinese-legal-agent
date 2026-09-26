@@ -170,9 +170,9 @@ async def _drain(
 class RunCommandInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    command: str = Field(min_length=1)
-    working_directory: str = Field(min_length=1)
-    timeout_seconds: int = Field(default=30, ge=1, le=MAX_TIMEOUT_SECONDS)
+    command: str = Field(min_length=1, description="要在系统 shell 中执行的完整命令。")
+    working_directory: str = Field(min_length=1, description="执行命令时使用的现有工作目录路径。")
+    timeout_seconds: int = Field(default=30, ge=1, le=MAX_TIMEOUT_SECONDS, description="命令超时时间，单位秒，默认 30 秒。")
 
 
 run_command_tool = StructuredTool.from_function(
