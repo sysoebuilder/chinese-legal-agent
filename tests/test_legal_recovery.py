@@ -1,4 +1,5 @@
 import asyncio
+import json
 
 import httpx
 import pytest
@@ -117,6 +118,50 @@ def test_final_answer_review_and_generation_errors_retry_in_subgraph():
     nodes.model = FailingModel()
     generation_state = _apply(state, asyncio.run(nodes.generate_final_answer(state)))
     assert _route_final_answer(generation_state) == "retry"
+
+
+def test_final_review_receives_retrieval_history_and_can_stop_search():
+    nodes = LegalNodes(model=None)
+    state = _state()
+    case = state["cases"]["case_1"]
+    case["usable_laws"] = [
+        {
+            "issue": "加班费",
+            "id": "law-1",
+            "payload": {"title": "劳动法"},
+            "bm25_score": None,
+            "vector_score": None,
+        }
+    ]
+    case["retrieval_queries"] = [
+        {
+            "issue": "休息日加班费",
+            "title_keywords": ["劳动法"],
+            "content_keywords": ["休息日加班"],
+            "case_facts": "仅用于检索的事实",
+        }
+    ]
+
+    async def review(schema, system, content, *, stream):
+        assert schema is LegalAnswerReviewOutput
+        assert stream is True
+        assert "不要重复或仅微调历史检索条件" in system
+        review_input = json.loads(content)
+        assert review_input["retrieval_query_history"] == [
+            {
+                "issue": "休息日加班费",
+                "title_keywords": ["劳动法"],
+                "content_keywords": ["休息日加班"],
+            }
+        ]
+        assert "仅用于检索的事实" not in content
+        return LegalAnswerReviewOutput(action="refuse", reason="相关角度已检索，依据仍不足")
+
+    nodes._invoke_json = review
+    updated = _apply(state, asyncio.run(nodes.generate_final_answer(state)))
+
+    assert _route_final_answer(updated) == "refuse"
+    assert updated["cases"]["case_1"]["refusal_reason"] == "相关角度已检索，依据仍不足"
 
 
 def test_insufficient_balance_status_does_not_retry_in_subgraph():

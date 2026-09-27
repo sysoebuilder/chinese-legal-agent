@@ -64,7 +64,7 @@ class LegalAnswerReviewOutput(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    action: Literal["answer", "ask_user", "retrieve_more"]
+    action: Literal["answer", "ask_user", "retrieve_more", "refuse"]
     reason: str = Field(min_length=1)
     question: str | None = None
     retrieval_cases: list[LegalRetrievalCaseOutput] = Field(default_factory=list)

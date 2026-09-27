@@ -312,6 +312,13 @@ ask_user 或 refuse，不要继续重复检索。
                 state,
                 refusal_reason="没有经过决策模型确认的可用法律依据。",
             )
+        answer_context = {
+            "current_question": case["current_question"],
+            "original_question": case["original_question"],
+            "user_supplements": case["user_supplements"],
+            "objective_facts": case["objective_facts"],
+            "usable_laws": case["usable_laws"],
+        }
         messages = [
             SystemMessage(
                 content=(
@@ -324,13 +331,7 @@ ask_user 或 refuse，不要继续重复检索。
                 content=(
                     "以下是本轮法律状态：\n"
                     + json.dumps(
-                        {
-                            "current_question": case["current_question"],
-                            "original_question": case["original_question"],
-                            "user_supplements": case["user_supplements"],
-                            "objective_facts": case["objective_facts"],
-                            "usable_laws": case["usable_laws"],
-                        },
+                        answer_context,
                         ensure_ascii=False,
                         default=str,
                     )
@@ -347,18 +348,34 @@ action 只能是：
 - answer：现有事实和 usable_laws 足以支持对用户核心问题的回答。
 - ask_user：缺少会影响核心结论的事实，question 必须明确询问缺少的信息。
 - retrieve_more：缺少支持核心结论的法律依据，retrieval_cases 必须提供针对缺口的检索条件。
+- refuse：现有依据不足且历史检索已覆盖相关角度，无法可靠回答。
 选择 retrieve_more 时，retrieval_cases 最多 5 个；全面列出本轮尚缺的不同法律依据，
 将实质不同的检索角度尽量放在同一批，不要把近义词拆成重复项。
+输入中的 retrieval_query_history 是此前已检索过的争议点和关键词。
+不要重复或仅微调历史检索条件；若没有实质不同的检索角度，
+应根据现有依据选择 answer、ask_user 或 refuse，不要继续检索。
 reason 说明通过检查的理由或具体缺口。不能把上游已选择最终回答当成依据充分的证明。
 区分关键缺口与一般办理建议；不影响核心回答的材料准备、后续行动建议不必回退。
 不要重复询问用户已经提供的信息，也不要猜测事实或编造未检索到的法律。
 """.strip(),
-            str(messages[-1].content),
+            json.dumps(
+                {
+                    **answer_context,
+                    "retrieval_query_history": self._retrieval_query_history(case),
+                },
+                ensure_ascii=False,
+                default=str,
+            ),
             stream=True,
         )
         if retry_update is not None:
             return retry_update
         if review.action != "answer":
+            if review.action == "refuse":
+                return self._update_case(
+                    state,
+                    refusal_reason=review.reason,
+                )
             if case["retrieval_round"] >= MAX_RETRIEVAL_ROUNDS:
                 return self._update_case(
                     state,
@@ -556,19 +573,23 @@ reason 说明通过检查的理由或具体缺口。不能把上游已选择最�
                     if case.get("retry_target") == "decide"
                     else None
                 ),
-                "retrieval_query_history": [
-                    {
-                        "issue": query["issue"],
-                        "title_keywords": query["title_keywords"],
-                        "content_keywords": query["content_keywords"],
-                    }
-                    for query in case["retrieval_queries"]
-                ],
+                "retrieval_query_history": LegalNodes._retrieval_query_history(case),
                 "retrieved_laws": case["retrieved_laws"],
             },
             ensure_ascii=False,
             default=str,
         )
+
+    @staticmethod
+    def _retrieval_query_history(case: LegalCase) -> list[dict[str, Any]]:
+        return [
+            {
+                "issue": query["issue"],
+                "title_keywords": query["title_keywords"],
+                "content_keywords": query["content_keywords"],
+            }
+            for query in case["retrieval_queries"]
+        ]
 
     @staticmethod
     def _latest_question(state: LegalAgentState) -> str:
