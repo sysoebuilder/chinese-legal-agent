@@ -11,9 +11,12 @@ MODEL_PATH = Path(__file__).resolve().parents[2] / "models" / "bge-reranker-v2-m
 def load_reranker():
     import torch
     from transformers import AutoModelForSequenceClassification, AutoTokenizer
+    from transformers.utils import logging as transformers_logging
 
     if not MODEL_PATH.is_dir():
         raise FileNotFoundError(f"本地重排模型不存在：{MODEL_PATH}")
+    # 本地权重加载进度会反复刷终端，关闭进度条但保留异常和警告。
+    transformers_logging.disable_progress_bar()
     tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH, local_files_only=True)
     use_cuda = torch.cuda.is_available()
     model = AutoModelForSequenceClassification.from_pretrained(

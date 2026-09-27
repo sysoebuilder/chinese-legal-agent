@@ -64,8 +64,13 @@ def test_search_memory_concurrent_queries_and_per_query_top_five(monkeypatch) ->
     store = FakeStore(vector_size=512)
     rerank_barrier = threading.Barrier(2)
     reranked_queries: list[str] = []
+    loaded = threading.Event()
+
+    def fake_load_reranker():
+        loaded.set()
 
     def fake_rerank(query, candidates):
+        assert loaded.is_set()
         rerank_barrier.wait(timeout=3)
         reranked_queries.append(query)
         assert {item["memory"]["id"] for item in candidates} == (
@@ -79,6 +84,7 @@ def test_search_memory_concurrent_queries_and_per_query_top_five(monkeypatch) ->
 
     monkeypatch.setattr(builtin, "GlmEmbeddingClient", FakeEmbedding)
     monkeypatch.setattr(builtin, "QdrantMemoryStore", lambda **kwargs: store)
+    monkeypatch.setattr(builtin, "load_reranker", fake_load_reranker)
     monkeypatch.setattr(builtin, "rerank_memories", fake_rerank)
 
     result = asyncio.run(builtin.handler([" first ", "second", "first"], key="topic"))
@@ -127,6 +133,7 @@ def test_ten_queries_return_each_query_top_five(monkeypatch) -> None:
 
     monkeypatch.setattr(builtin, "GlmEmbeddingClient", FakeEmbedding)
     monkeypatch.setattr(builtin, "QdrantMemoryStore", lambda **kwargs: FakeStore())
+    monkeypatch.setattr(builtin, "load_reranker", lambda: None)
     monkeypatch.setattr(builtin, "rerank_memories", fake_rerank)
 
     result = asyncio.run(builtin.handler([f"query {index}" for index in range(10)]))

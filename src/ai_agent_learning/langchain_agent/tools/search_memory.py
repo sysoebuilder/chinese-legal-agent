@@ -7,9 +7,9 @@ from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, ConfigDict, Field
 
 from ai_agent_learning.langchain_agent.tools.risk import RiskLevel
-from ai_agent_learning.reranker import rerank_memories
 from ai_agent_learning.memory.embedding import GlmEmbeddingClient
 from ai_agent_learning.memory.store import QdrantMemoryStore
+from ai_agent_learning.reranker import load_reranker, rerank_memories
 
 TOOL_DESCRIPTION = (
     "按需检索与当前对话有关的用户长期记忆。在回答需要依赖以往记忆时调用。queries 应描述需要查找的信息，并结合当前对话消除‘之前’‘这个’"
@@ -53,6 +53,7 @@ async def handler(
         if normalized_key:
             key_matches = await store.find_by_key(normalized_key, limit=KEY_LIMIT)
         vectors = await embedding.embed(normalized_queries)
+        await asyncio.to_thread(load_reranker)
 
         async def search_query(query: str, vector: list[float]) -> list[dict[str, Any]]:
             vector_matches = await store.search(
