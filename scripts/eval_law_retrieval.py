@@ -3,16 +3,15 @@
 import argparse
 import asyncio
 import json
-import os
 import time
 from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
 
+from ai_agent_learning.langchain_agent.tools.search_raws import handler
 from ai_agent_learning.paths import get_data_dir
 from ai_agent_learning.qdrant_server import QdrantServer
-from ai_agent_learning.langchain_agent.tools.search_raws import handler
 
 
 def load_cases(path: Path) -> list[dict[str, Any]]:
@@ -127,9 +126,6 @@ async def main() -> None:
         raise ValueError("batch-size 必须在 1 到 5 之间")
 
     load_dotenv(get_data_dir() / ".env", override=False)
-    if not os.getenv("ZAI_API_KEY", "").strip():
-        raise ValueError("缺少 ZAI_API_KEY，无法运行向量查询")
-
     cases = load_cases(args.dataset)
     server = QdrantServer()
     try:
