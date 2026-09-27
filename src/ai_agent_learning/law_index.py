@@ -42,14 +42,15 @@ class LawBm25Index:
         self.title = bm25s.BM25.load(self.path / "title", mmap=True)
         self.content = bm25s.BM25.load(self.path / "content", mmap=True)
 
-    def title_candidates(self, keywords: list[str], limit: int = 50) -> list[str]:
+    def title_candidates(self, keywords: list[str]) -> list[str]:
         tokens = tokenize(" ".join(keywords))
         if not tokens:
             return []
-        documents, scores = self.title.retrieve(
-            [tokens], corpus=self.ids, k=min(limit, len(self.ids)), show_progress=False
-        )
-        return [str(item) for item, score in zip(documents[0], scores[0]) if score > 0]
+        scores = self.title.get_scores(tokens)
+        max_score = scores.max()
+        if max_score <= 0:
+            return []
+        return [self.ids[int(position)] for position in np.flatnonzero(scores == max_score)]
 
     def rerank_content(
         self, keywords: list[str], candidates: list[str], limit: int = 10

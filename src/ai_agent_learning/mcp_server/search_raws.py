@@ -1,4 +1,4 @@
-"""法律法规混合检索；暂时使用当前项目的索引与 Qdrant 集合。"""
+"""法律法规检索；有标题走 BM25，无标题走向量检索。"""
 
 import asyncio
 import os
@@ -8,9 +8,9 @@ from pydantic import BaseModel, ConfigDict, Field
 from qdrant_client import AsyncQdrantClient, models
 
 from ai_agent_learning.law_index import LawBm25Index
-from ai_agent_learning.reranker import load_reranker, rerank_laws
 from ai_agent_learning.memory.embedding import GlmEmbeddingClient
 from ai_agent_learning.qdrant_config import DEFAULT_QDRANT_URL
+from ai_agent_learning.reranker import load_reranker, rerank_laws
 
 TOOL_DESCRIPTION = (
     "从中国法律法规与规章知识库中检索相关资料。将问题拆成互不重复的法律争议点；关键词保持中性，案件事实不得预设法律结论。返回结果可能包含有效、失"
@@ -25,7 +25,9 @@ TOOL_DESCRIPTION = (
 class RetrievalCase(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    issue: str = Field(min_length=1, description="该条检索对应的独立法律争议点，简短概括。")
+    issue: str = Field(
+        min_length=1, description="该条检索对应的独立法律争议点，简短概括。"
+    )
     title_keywords: list[Annotated[str, Field(min_length=1)]] = Field(
         description="可能适用的法规名称或标题关键词，用于 BM25S 标题召回；不确定法规名称时可填空数组。"
     )
@@ -35,7 +37,7 @@ class RetrievalCase(BaseModel):
     )
     case_facts: str = Field(
         min_length=1,
-        description="与该争议点有关的客观案情和待解决问题，用于向量检索与最终重排；不得预设法律结论。",
+        description="与该争议点有关的客观案情和待解决问题；无标题关键词时用于向量检索，所有情况都用于最终重排。不得预设法律结论。",
     )
 
 
@@ -47,60 +49,73 @@ async def search_laws(retrieval_cases: list[RetrievalCase]) -> dict[str, Any]:
         url=(os.getenv("QDRANT_URL") or DEFAULT_QDRANT_URL).strip(), timeout=60
     )
     try:
-        vectors = await embedding.embed([case.case_facts for case in retrieval_cases])
+        vector_cases = [case for case in retrieval_cases if not case.title_keywords]
+        vectors = (
+            await embedding.embed([case.case_facts for case in vector_cases])
+            if vector_cases
+            else []
+        )
+        vector_iter = iter(vectors)
+        cases_with_vectors = [
+            (case, next(vector_iter) if not case.title_keywords else None)
+            for case in retrieval_cases
+        ]
         await asyncio.to_thread(load_reranker)
-        async def search_case(case: RetrievalCase, vector: list[float]) -> dict[str, Any]:
-            title_ids = await asyncio.to_thread(
-                index.title_candidates, case.title_keywords, 100
-            )
-            lexical = await asyncio.to_thread(
-                index.rerank_content, case.content_keywords, title_ids, 50
-            )
-            semantic = await store.query_points(
-                "npc_laws",
-                query=vector,
-                using="text",
-                limit=50,
-                score_threshold=0.6,
-                with_payload=True,
-                search_params=models.SearchParams(exact=False),
-            )
+
+        async def search_case(
+            case: RetrievalCase, vector: list[float] | None
+        ) -> dict[str, Any]:
             merged: dict[str, dict[str, Any]] = {}
-            lexical_rows = (
-                await store.retrieve(
-                    "npc_laws",
-                    ids=[point_id for point_id, _ in lexical],
-                    with_payload=True,
-                    with_vectors=False,
+            if vector is None:
+                title_ids = await asyncio.to_thread(
+                    index.title_candidates, case.title_keywords
                 )
-                if lexical
-                else []
-            )
-            lexical_payload = {str(row.id): row.payload for row in lexical_rows}
-            for point_id, score in lexical:
-                merged[point_id] = {
-                    "id": point_id,
-                    "payload": lexical_payload.get(point_id),
-                    "bm25_score": score,
-                    "vector_score": None,
-                }
-            for point in semantic.points:
-                point_id = str(point.id)
-                item = merged.setdefault(
-                    point_id,
-                    {
+                lexical = await asyncio.to_thread(
+                    index.rerank_content, case.content_keywords, title_ids, 50
+                )
+                lexical_rows = (
+                    await store.retrieve(
+                        "npc_laws",
+                        ids=[point_id for point_id, _ in lexical],
+                        with_payload=True,
+                        with_vectors=False,
+                    )
+                    if lexical
+                    else []
+                )
+                lexical_payload = {str(row.id): row.payload for row in lexical_rows}
+                for point_id, score in lexical:
+                    merged[point_id] = {
+                        "id": point_id,
+                        "payload": lexical_payload.get(point_id),
+                        "bm25_score": score,
+                        "vector_score": None,
+                    }
+            else:
+                semantic = await store.query_points(
+                    "npc_laws",
+                    query=vector,
+                    using="text",
+                    limit=50,
+                    score_threshold=0.6,
+                    with_payload=True,
+                    search_params=models.SearchParams(exact=True),
+                )
+                for point in semantic.points:
+                    point_id = str(point.id)
+                    merged[point_id] = {
                         "id": point_id,
                         "payload": point.payload,
                         "bm25_score": None,
                         "vector_score": point.score,
-                    },
-                )
-                item["vector_score"] = point.score
-            laws = await asyncio.to_thread(rerank_laws, case.case_facts, list(merged.values()))
+                    }
+            laws = await asyncio.to_thread(
+                rerank_laws, case.case_facts, list(merged.values())
+            )
             return {"issue": case.issue, "laws": laws}
 
         output = await asyncio.gather(
-            *(search_case(case, vector) for case, vector in zip(retrieval_cases, vectors, strict=True))
+            *(search_case(case, vector) for case, vector in cases_with_vectors)
         )
         return {"results": output}
     finally:
