@@ -7,7 +7,6 @@ from langchain.agents.middleware import (
     ToolRetryMiddleware,
 )
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_deepseek import ChatDeepSeek
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
@@ -15,6 +14,9 @@ from langgraph.graph.state import CompiledStateGraph
 from pydantic import SecretStr
 
 from ai_agent_learning.langchain_agent.approval import build_interrupt_on
+from ai_agent_learning.langchain_agent.deepseek import (
+    ChatDeepSeekWithJsonReasoning as ChatDeepSeek,
+)
 from ai_agent_learning.langchain_agent.glm import ChatGlm
 from ai_agent_learning.langchain_agent.legal import (
     LegalAgentState,
