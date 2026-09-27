@@ -1,4 +1,5 @@
 import asyncio
+from contextlib import asynccontextmanager
 from io import StringIO
 from types import SimpleNamespace
 
@@ -7,6 +8,7 @@ from langchain_core.runnables import RunnableConfig
 from pydantic import SecretStr
 from rich.console import Console
 
+from ai_agent_learning.langchain_agent import chat as chat_module
 from ai_agent_learning.langchain_agent import runtime
 from ai_agent_learning.langchain_agent.chat import (
     _new_turn_config,
@@ -15,6 +17,74 @@ from ai_agent_learning.langchain_agent.chat import (
 )
 from ai_agent_learning.model_config import ModelConfig
 from ai_agent_learning.ui.terminal import TerminalUI
+
+
+def test_new_chat_exit_before_first_message_does_not_create_session(monkeypatch, tmp_path):
+    created = []
+
+    class FakeSessionStore:
+        def __init__(self, connection):
+            pass
+
+        async def list_sessions(self):
+            return []
+
+        async def create_session(self):
+            created.append(True)
+            raise AssertionError("退出前不应创建会话")
+
+    class FakeUI:
+        def show_sessions(self, sessions):
+            assert sessions == []
+
+        def show_header(self, model, session_name):
+            assert session_name == ""
+
+        def read_message(self):
+            return "EXIT"
+
+    class FakeServer:
+        async def start(self):
+            pass
+
+        async def close(self):
+            pass
+
+    class FakeWorker:
+        is_idle = True
+
+        def __init__(self, *args):
+            pass
+
+        def start(self):
+            pass
+
+        async def close(self):
+            pass
+
+    @asynccontextmanager
+    async def fake_checkpointer(_):
+        yield SimpleNamespace(conn=object())
+
+    monkeypatch.setattr("builtins.input", lambda _: "0")
+    monkeypatch.setattr(chat_module, "get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr(chat_module, "configure_logging", lambda _: None)
+    monkeypatch.setattr(chat_module, "shutdown_logging", lambda: None)
+    monkeypatch.setattr(chat_module, "load_active_model", lambda: SimpleNamespace(model="test"))
+    monkeypatch.setattr(chat_module, "load_dotenv", lambda *args, **kwargs: None)
+    monkeypatch.setattr(chat_module, "QdrantServer", FakeServer)
+    monkeypatch.setattr(chat_module, "TerminalUI", FakeUI)
+    monkeypatch.setattr(chat_module, "SqliteSessionStore", FakeSessionStore)
+    monkeypatch.setattr(chat_module, "MemoryWorker", FakeWorker)
+    monkeypatch.setattr(chat_module, "create_langchain_model", lambda _: object())
+    monkeypatch.setattr(chat_module, "create_new_chat_agent", lambda *args, **kwargs: object())
+    monkeypatch.setattr(
+        chat_module.AsyncSqliteSaver, "from_conn_string", fake_checkpointer
+    )
+
+    asyncio.run(chat_module.run_new_chat())
+
+    assert created == []
 
 
 def test_create_langchain_model_uses_deepseek_adapter(monkeypatch):

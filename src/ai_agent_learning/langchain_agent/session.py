@@ -172,15 +172,15 @@ async def create_session_name(
 async def select_sqlite_session(
     store: SqliteSessionStore,
     ui: TerminalUI,
-) -> SqliteSession:
-    """显示 SQLite 会话目录并返回用户选择或新建的会话。"""
+) -> SqliteSession | None:
+    """返回已有会话；选择新建时延迟到首条有效消息再创建。"""
     sessions = await store.list_sessions()
     ui.show_sessions(sessions)
 
     while True:
         choice = input("请选择会话编号: ").strip()
         if choice == "0":
-            return await store.create_session()
+            return None
         if not choice.isdigit():
             ui.show_error("请输入数字")
             continue

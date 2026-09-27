@@ -261,13 +261,14 @@ async def run_new_chat() -> None:
         ) as checkpointer:
             session_store = SqliteSessionStore(checkpointer.conn)
             session = await select_sqlite_session(session_store, ui)
-            logger.info(
-                "会话已就绪",
-                extra={
-                    "event": "newchat.session.ready",
-                    "session_id": session.thread_id,
-                },
-            )
+            if session is not None:
+                logger.info(
+                    "会话已就绪",
+                    extra={
+                        "event": "newchat.session.ready",
+                        "session_id": session.thread_id,
+                    },
+                )
             model = create_langchain_model(config)
             memory_model = create_langchain_model(config)
             memory_queue: asyncio.Queue[MemoryTurn] = asyncio.Queue()
@@ -285,30 +286,32 @@ async def run_new_chat() -> None:
                 memory_middleware=memory_middleware,
             )
             try:
-                ui.show_header(config.model, session.name)
-                try:
-                    resumed_messages = await _resume_pending_turn(
-                        agent, ui, session.thread_id, confirm=True
-                    )
-                except Exception as error:
-                    logger.exception(
-                        "启动时断点恢复失败",
-                        extra={
-                            "event": "chat.turn.resume_failed",
-                            "session_id": session.thread_id,
-                            "error_type": type(error).__name__,
-                        },
-                    )
-                    ui.show_error(f"断点恢复失败：{error}")
-                    return
-                if resumed_messages is not None:
+                ui.show_header(config.model, session.name if session else "")
+                resumed_messages = None
+                if session is not None:
+                    try:
+                        resumed_messages = await _resume_pending_turn(
+                            agent, ui, session.thread_id, confirm=True
+                        )
+                    except Exception as error:
+                        logger.exception(
+                            "启动时断点恢复失败",
+                            extra={
+                                "event": "chat.turn.resume_failed",
+                                "session_id": session.thread_id,
+                                "error_type": type(error).__name__,
+                            },
+                        )
+                        ui.show_error(f"断点恢复失败：{error}")
+                        return
+                if resumed_messages is not None and session is not None:
                     await session_store.touch(session)
                 while True:
                     content = await asyncio.to_thread(ui.read_message)
                     if not content:
                         ui.show_notice("消息不能为空")
                         continue
-                    if content in {"exit", "quit"}:
+                    if content.lower() in {"exit", "quit"}:
                         if not memory_worker.is_idle:
                             ui.show_notice("正在等待剩余记忆整理完成…")
                             await memory_worker.wait_until_idle()
@@ -316,10 +319,20 @@ async def run_new_chat() -> None:
                             "新版会话正常退出",
                             extra={
                                 "event": "newchat.completed",
-                                "session_id": session.thread_id,
+                                "session_id": session.thread_id if session else None,
                             },
                         )
                         return
+
+                    if session is None:
+                        session = await session_store.create_session()
+                        logger.info(
+                            "会话已就绪",
+                            extra={
+                                "event": "newchat.session.ready",
+                                "session_id": session.thread_id,
+                            },
+                        )
 
                     trace_id = uuid4().hex
                     started_at = time.perf_counter()
