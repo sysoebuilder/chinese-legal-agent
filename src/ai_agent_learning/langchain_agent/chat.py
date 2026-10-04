@@ -7,7 +7,6 @@ import time
 from typing import Any
 from uuid import uuid4
 
-from dotenv import load_dotenv
 from langchain_core.messages import (
     AIMessage,
     AIMessageChunk,
@@ -16,29 +15,13 @@ from langchain_core.messages import (
     ToolMessage,
 )
 from langchain_core.runnables import RunnableConfig
-from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.types import Command, Interrupt
 from openai import APIStatusError
 
-from ai_agent_learning.langchain_agent.memory import MemoryWorker
-from ai_agent_learning.langchain_agent.middleware.memory import (
-    MemorySaveMiddleware,
-    MemoryTurn,
-)
-from ai_agent_learning.langchain_agent.runtime import (
-    create_langchain_model,
-    create_new_chat_agent,
-)
 from ai_agent_learning.langchain_agent.session import (
-    SqliteSessionStore,
     create_session_name,
-    select_sqlite_session,
 )
 from ai_agent_learning.langchain_agent.tools import TOOL_BY_NAME
-from ai_agent_learning.logging_config import configure_logging, shutdown_logging
-from ai_agent_learning.model_config import load_active_model, source_config_path
-from ai_agent_learning.paths import get_data_dir
-from ai_agent_learning.qdrant_server import QdrantServer
 from ai_agent_learning.ui.terminal import TerminalUI
 
 logger = logging.getLogger(__name__)
@@ -245,185 +228,147 @@ async def _review_interrupt(
     return {"decisions": decisions}
 
 
-async def run_new_chat() -> None:
-    """运行 LangChain/LangGraph 多轮会话。"""
-    checkpoint_path = get_data_dir() / "langgraph-checkpoints.sqlite"
-    configure_logging(checkpoint_path)
-    logger.info("新版会话启动", extra={"event": "newchat.started"})
-    server = QdrantServer()
-    try:
-        config = load_active_model()
-        load_dotenv(source_config_path(), override=False)
-        await server.start()
-        ui = TerminalUI()
-        async with AsyncSqliteSaver.from_conn_string(
-            str(checkpoint_path)
-        ) as checkpointer:
-            session_store = SqliteSessionStore(checkpointer.conn)
-            session = await select_sqlite_session(session_store, ui)
-            if session is not None:
-                logger.info(
-                    "会话已就绪",
+async def run_chat_loop(agent, model, config, ui, session_store, session, memory_worker) -> None:
+    """处理会话恢复、用户输入和对话轮次；资源由调用方管理。"""
+    ui.show_header(config.model, session.name if session else "")
+    resumed_messages = None
+    if session is not None:
+        try:
+            resumed_messages = await _resume_pending_turn(
+                agent, ui, session.thread_id, confirm=True
+            )
+        except Exception as error:
+            logger.exception(
+                "启动时断点恢复失败",
+                extra={
+                    "event": "chat.turn.resume_failed",
+                    "session_id": session.thread_id,
+                    "error_type": type(error).__name__,
+                },
+            )
+            ui.show_error(f"断点恢复失败：{error}")
+            return
+    if resumed_messages is not None and session is not None:
+        await session_store.touch(session)
+    while True:
+        content = await asyncio.to_thread(ui.read_message)
+        if not content:
+            ui.show_notice("消息不能为空")
+            continue
+        if content.lower() in {"exit", "quit"}:
+            if not memory_worker.is_idle:
+                ui.show_notice("正在等待剩余记忆整理完成…")
+                await memory_worker.wait_until_idle()
+            logger.info(
+                "新版会话正常退出",
+                extra={
+                    "event": "newchat.completed",
+                    "session_id": session.thread_id if session else None,
+                },
+            )
+            return
+
+        if session is None:
+            session = await session_store.create_session()
+            logger.info(
+                "会话已就绪",
+                extra={
+                    "event": "newchat.session.ready",
+                    "session_id": session.thread_id,
+                },
+            )
+
+        trace_id = uuid4().hex
+        started_at = time.perf_counter()
+        turn_config = _new_turn_config(session.thread_id, trace_id)
+        logger.info(
+            "对话轮次开始",
+            extra={
+                "event": "chat.turn.started",
+                "session_id": session.thread_id,
+                "trace_id": trace_id,
+                "model": config.model,
+            },
+        )
+        ui.begin_turn()
+        try:
+            messages = await stream_agent_turn(
+                agent,
+                content,
+                ui,
+                turn_config,
+                trace_id,
+            )
+        except Exception as error:
+            logger.exception(
+                "对话轮次失败",
+                extra={
+                    "event": "chat.turn.failed",
+                    "session_id": session.thread_id,
+                    "trace_id": trace_id,
+                    "model": config.model,
+                    "duration_ms": round(
+                        (time.perf_counter() - started_at) * 1000,
+                        2,
+                    ),
+                    "error_type": type(error).__name__,
+                },
+            )
+            ui.close_turn()
+            ui.show_error(str(error))
+            if _is_nonrecoverable_api_error(error):
+                ui.show_notice("API 错误需要先修正账号或请求；当前 checkpoint 已保留。")
+                return
+            try:
+                recovered_messages = await _resume_pending_turn(
+                    agent, ui, session.thread_id, confirm=True
+                )
+            except Exception as resume_error:
+                logger.exception(
+                    "报错后断点恢复失败",
                     extra={
-                        "event": "newchat.session.ready",
+                        "event": "chat.turn.resume_failed",
                         "session_id": session.thread_id,
+                        "error_type": type(resume_error).__name__,
                     },
                 )
-            model = create_langchain_model(config)
-            memory_model = create_langchain_model(config)
-            memory_queue: asyncio.Queue[MemoryTurn] = asyncio.Queue()
-            memory_middleware = MemorySaveMiddleware(memory_queue)
-            memory_worker = MemoryWorker(
-                memory_queue,
-                memory_model,
-                config.model,
-            )
-            memory_worker.start()
-            agent = create_new_chat_agent(
-                config,
-                checkpointer=checkpointer,
-                model=model,
-                memory_middleware=memory_middleware,
-            )
+                ui.show_error(f"断点恢复失败：{resume_error}")
+                return
+            if recovered_messages is None:
+                continue
+            messages = recovered_messages
+        finally:
+            ui.close_turn()
+
+        logger.info(
+            "对话轮次完成",
+            extra={
+                "event": "chat.turn.completed",
+                "session_id": session.thread_id,
+                "trace_id": trace_id,
+                "model": config.model,
+                "duration_ms": round(
+                    (time.perf_counter() - started_at) * 1000,
+                    2,
+                ),
+                "message_count": len(messages),
+            },
+        )
+
+        if not session.name.strip():
             try:
-                ui.show_header(config.model, session.name if session else "")
-                resumed_messages = None
-                if session is not None:
-                    try:
-                        resumed_messages = await _resume_pending_turn(
-                            agent, ui, session.thread_id, confirm=True
-                        )
-                    except Exception as error:
-                        logger.exception(
-                            "启动时断点恢复失败",
-                            extra={
-                                "event": "chat.turn.resume_failed",
-                                "session_id": session.thread_id,
-                                "error_type": type(error).__name__,
-                            },
-                        )
-                        ui.show_error(f"断点恢复失败：{error}")
-                        return
-                if resumed_messages is not None and session is not None:
-                    await session_store.touch(session)
-                while True:
-                    content = await asyncio.to_thread(ui.read_message)
-                    if not content:
-                        ui.show_notice("消息不能为空")
-                        continue
-                    if content.lower() in {"exit", "quit"}:
-                        if not memory_worker.is_idle:
-                            ui.show_notice("正在等待剩余记忆整理完成…")
-                            await memory_worker.wait_until_idle()
-                        logger.info(
-                            "新版会话正常退出",
-                            extra={
-                                "event": "newchat.completed",
-                                "session_id": session.thread_id if session else None,
-                            },
-                        )
-                        return
+                session_name = await create_session_name(model, content)
+            except Exception as error:  # noqa: BLE001 -- 标题失败不影响对话。
+                ui.show_error(f"会话标题生成失败：{error}")
+                await session_store.touch(session)
+            else:
+                await session_store.update_name(session, session_name)
+        else:
+            await session_store.touch(session)
 
-                    if session is None:
-                        session = await session_store.create_session()
-                        logger.info(
-                            "会话已就绪",
-                            extra={
-                                "event": "newchat.session.ready",
-                                "session_id": session.thread_id,
-                            },
-                        )
 
-                    trace_id = uuid4().hex
-                    started_at = time.perf_counter()
-                    turn_config = _new_turn_config(session.thread_id, trace_id)
-                    logger.info(
-                        "对话轮次开始",
-                        extra={
-                            "event": "chat.turn.started",
-                            "session_id": session.thread_id,
-                            "trace_id": trace_id,
-                            "model": config.model,
-                        },
-                    )
-                    ui.begin_turn()
-                    try:
-                        messages = await stream_agent_turn(
-                            agent,
-                            content,
-                            ui,
-                            turn_config,
-                            trace_id,
-                        )
-                    except Exception as error:
-                        logger.exception(
-                            "对话轮次失败",
-                            extra={
-                                "event": "chat.turn.failed",
-                                "session_id": session.thread_id,
-                                "trace_id": trace_id,
-                                "model": config.model,
-                                "duration_ms": round(
-                                    (time.perf_counter() - started_at) * 1000,
-                                    2,
-                                ),
-                                "error_type": type(error).__name__,
-                            },
-                        )
-                        ui.close_turn()
-                        ui.show_error(str(error))
-                        if _is_nonrecoverable_api_error(error):
-                            ui.show_notice("API 错误需要先修正账号或请求；当前 checkpoint 已保留。")
-                            return
-                        try:
-                            recovered_messages = await _resume_pending_turn(
-                                agent, ui, session.thread_id, confirm=True
-                            )
-                        except Exception as resume_error:
-                            logger.exception(
-                                "报错后断点恢复失败",
-                                extra={
-                                    "event": "chat.turn.resume_failed",
-                                    "session_id": session.thread_id,
-                                    "error_type": type(resume_error).__name__,
-                                },
-                            )
-                            ui.show_error(f"断点恢复失败：{resume_error}")
-                            return
-                        if recovered_messages is None:
-                            continue
-                        messages = recovered_messages
-                    finally:
-                        ui.close_turn()
+async def run_new_chat() -> None:
+    """兼容原有调用；主流程已迁至 run 模块。"""
+    from ai_agent_learning.langchain_agent.run import run
 
-                    logger.info(
-                        "对话轮次完成",
-                        extra={
-                            "event": "chat.turn.completed",
-                            "session_id": session.thread_id,
-                            "trace_id": trace_id,
-                            "model": config.model,
-                            "duration_ms": round(
-                                (time.perf_counter() - started_at) * 1000,
-                                2,
-                            ),
-                            "message_count": len(messages),
-                        },
-                    )
-
-                    if not session.name.strip():
-                        try:
-                            session_name = await create_session_name(model, content)
-                        except Exception as error:  # noqa: BLE001 -- 标题失败不影响对话。
-                            ui.show_error(f"会话标题生成失败：{error}")
-                            await session_store.touch(session)
-                        else:
-                            await session_store.update_name(session, session_name)
-                    else:
-                        await session_store.touch(session)
-            finally:
-                await memory_worker.close()
-    finally:
-        await server.close()
-        logger.info("新版会话资源已关闭", extra={"event": "newchat.closed"})
-        shutdown_logging()
+    await run()

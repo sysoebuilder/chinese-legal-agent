@@ -10,6 +10,7 @@ from rich.console import Console
 
 from ai_agent_learning.langchain_agent import chat as chat_module
 from ai_agent_learning.langchain_agent import runtime
+from ai_agent_learning.langchain_agent import run as run_module
 from ai_agent_learning.langchain_agent.chat import (
     _new_turn_config,
     _resume_pending_turn,
@@ -21,6 +22,8 @@ from ai_agent_learning.ui.terminal import TerminalUI
 
 def test_new_chat_exit_before_first_message_does_not_create_session(monkeypatch, tmp_path):
     created = []
+    closed = []
+    mcp_tools = [object()]
 
     class FakeSessionStore:
         def __init__(self, connection):
@@ -48,7 +51,7 @@ def test_new_chat_exit_before_first_message_does_not_create_session(monkeypatch,
             pass
 
         async def close(self):
-            pass
+            closed.append("qdrant")
 
     class FakeWorker:
         is_idle = True
@@ -60,31 +63,49 @@ def test_new_chat_exit_before_first_message_does_not_create_session(monkeypatch,
             pass
 
         async def close(self):
-            pass
+            closed.append("memory")
 
     @asynccontextmanager
     async def fake_checkpointer(_):
-        yield SimpleNamespace(conn=object())
+        try:
+            yield SimpleNamespace(conn=object())
+        finally:
+            closed.append("sqlite")
+
+    @asynccontextmanager
+    async def fake_connect_servers(**kwargs):
+        assert kwargs["cloud_servers"] == {"remote": {"url": "https://remote.example/mcp"}}
+        try:
+            yield SimpleNamespace(tools=mcp_tools, errors={})
+        finally:
+            closed.append("mcp")
+
+    def fake_create_agent(*args, **kwargs):
+        assert kwargs["mcp_tools"] is mcp_tools
+        return object()
 
     monkeypatch.setattr("builtins.input", lambda _: "0")
-    monkeypatch.setattr(chat_module, "get_data_dir", lambda: tmp_path)
-    monkeypatch.setattr(chat_module, "configure_logging", lambda _: None)
-    monkeypatch.setattr(chat_module, "shutdown_logging", lambda: None)
-    monkeypatch.setattr(chat_module, "load_active_model", lambda: SimpleNamespace(model="test"))
-    monkeypatch.setattr(chat_module, "load_dotenv", lambda *args, **kwargs: None)
-    monkeypatch.setattr(chat_module, "QdrantServer", FakeServer)
-    monkeypatch.setattr(chat_module, "TerminalUI", FakeUI)
-    monkeypatch.setattr(chat_module, "SqliteSessionStore", FakeSessionStore)
-    monkeypatch.setattr(chat_module, "MemoryWorker", FakeWorker)
-    monkeypatch.setattr(chat_module, "create_langchain_model", lambda _: object())
-    monkeypatch.setattr(chat_module, "create_new_chat_agent", lambda *args, **kwargs: object())
+    monkeypatch.setattr(run_module, "get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr(run_module, "configure_logging", lambda _: None)
+    monkeypatch.setattr(run_module, "shutdown_logging", lambda: None)
+    monkeypatch.setattr(run_module, "load_active_model", lambda: SimpleNamespace(model="test"))
+    monkeypatch.setattr(run_module, "load_dotenv", lambda *args, **kwargs: None)
+    monkeypatch.setattr(run_module, "QdrantServer", FakeServer)
+    monkeypatch.setattr(run_module, "TerminalUI", FakeUI)
+    monkeypatch.setattr(run_module, "SqliteSessionStore", FakeSessionStore)
+    monkeypatch.setattr(run_module, "MemoryWorker", FakeWorker)
+    monkeypatch.setattr(run_module, "create_langchain_model", lambda _: object())
+    monkeypatch.setattr(run_module, "create_new_chat_agent", fake_create_agent)
+    monkeypatch.setattr(run_module, "connect_servers", fake_connect_servers)
+    monkeypatch.setattr(run_module, "CLOUD_MCP_SERVERS", {"remote": {"url": "https://remote.example/mcp"}})
     monkeypatch.setattr(
-        chat_module.AsyncSqliteSaver, "from_conn_string", fake_checkpointer
+        run_module.AsyncSqliteSaver, "from_conn_string", fake_checkpointer
     )
 
     asyncio.run(chat_module.run_new_chat())
 
     assert created == []
+    assert closed == ["memory", "mcp", "sqlite", "qdrant"]
 
 
 def test_create_langchain_model_uses_deepseek_adapter(monkeypatch):

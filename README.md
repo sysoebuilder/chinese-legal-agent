@@ -35,6 +35,8 @@ Version **0.5.0** · Python **3.11+** · Command **`agent100`**
 
 ### 快速开始
 
+项目根目录可通过 `.\.venv\Scripts\python.exe run.py` 启动聊天。主流程在 `src/ai_agent_learning/langchain_agent/run.py` 中统一创建 Agent 并管理资源，`chat.py` 负责对话循环和流式事件处理。
+
 以下使用 Windows PowerShell。当前命令执行工具仅支持 Windows；工作目录不构成文件访问沙箱。
 
 ```powershell
@@ -54,7 +56,7 @@ python -m venv .venv
 
 `newchat` 是当前唯一的聊天入口，提供多轮持久化会话、流式终端输出、工具审批、上下文摘要与异步记忆整理。
 
-法律检索另有独立的 stdio MCP Server，可供 MCP Host 启动并发现 `search_raws` 工具：
+法律检索另有独立的 stdio MCP Server，可供 MCP Host 启动并发现 `search_laws` 工具：
 
 ```powershell
 .\.venv\Scripts\python.exe -m ai_agent_learning.mcp_server
@@ -68,7 +70,7 @@ python -m venv .venv
 
 远端 MCP 地址为 `http://<公网 IP>:8000/mcp`。若本机在路由器后面，还需要将公网端口转发至这台计算机，并允许该端口通过主机防火墙；HTTP 模式目前不设鉴权。
 
-它暂时复用当前项目的 `data/law-bm25` 索引、Qdrant `npc_laws` 集合和 `data/.env` 中的 `ZAI_API_KEY`；默认连接 `http://127.0.0.1:6333`，也可用 `QDRANT_URL`、`LLM_CLI_DATA_DIR` 覆盖。Qdrant 服务需要已经运行；MCP Server 不会另外启动 Qdrant。原有 LangChain 法律检索工具仍可使用。
+它暂时复用当前项目的 `data/law-bm25` 索引、Qdrant `npc_laws` 集合和 `data/.env` 中的 `ZAI_API_KEY`；默认连接 `http://127.0.0.1:6333`，也可用 `QDRANT_URL`、`LLM_CLI_DATA_DIR` 覆盖。MCP Server 启动时会检查 Qdrant：已有服务可用时直接复用，默认本机服务不可用时自动启动，并在退出时关闭自行启动的进程；远程地址不可用时报告错误。原有 LangChain 法律检索工具仍可使用。
 
 Web Search 功能基于 GLM 搜索引擎实现，长期记忆使用 GLM Embedding-3 生成向量，两项功能都必须配置 GLM API Key（环境变量名为 `ZAI_API_KEY`）；即使当前对话模型选择 DeepSeek，该配置仍不可省略。邮件工具另需配置 `QQ_SMTP_USERNAME` 和 `QQ_SMTP_AUTH_CODE`，后者是 SMTP 授权码，不是邮箱登录密码。模型、搜索和向量化调用使用你自己的服务账号，可能产生费用。
 

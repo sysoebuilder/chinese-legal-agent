@@ -1,7 +1,7 @@
 import argparse
 import asyncio
 
-from ai_agent_learning.langchain_agent.chat import run_new_chat
+from ai_agent_learning.langchain_agent.run import run
 from ai_agent_learning.main import run_config, run_law_install
 
 
@@ -56,7 +56,7 @@ def main() -> None:
             run_config()
 
         elif args.command == "chat":
-            asyncio.run(run_new_chat())
+            asyncio.run(run())
 
         elif args.command == "laws" and args.laws_command == "install":
             run_law_install()

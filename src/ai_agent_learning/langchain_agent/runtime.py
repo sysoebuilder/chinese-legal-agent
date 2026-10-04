@@ -1,5 +1,7 @@
 """新版 LangChain Agent 的模型和运行图构建。"""
 
+from collections.abc import Sequence
+
 from langchain.agents import create_agent
 from langchain.agents.middleware import (
     AgentMiddleware,
@@ -7,6 +9,7 @@ from langchain.agents.middleware import (
     ToolRetryMiddleware,
 )
 from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.tools import BaseTool
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
@@ -76,10 +79,17 @@ def create_new_chat_agent(
     checkpointer: BaseCheckpointSaver | None = None,
     model: BaseChatModel | None = None,
     memory_middleware: MemorySaveMiddleware | None = None,
+    mcp_tools: Sequence[BaseTool] | None = None,
 ) -> CompiledStateGraph:
     """创建以法律子图为前置路由的新版 Agent。"""
     model = model or create_langchain_model(config)
-    general_tools = [tool for tool in ALL_TOOLS if tool.name != "search_raws"]
+    general_tools: list[BaseTool] = [tool for tool in ALL_TOOLS if tool.name != "search_laws"]
+    registered_names = {tool.name for tool in general_tools}
+    for tool in mcp_tools or []:
+        if tool.name in registered_names:
+            raise ValueError(f"重复的工具名称：{tool.name}")
+        general_tools.append(tool)
+        registered_names.add(tool.name)
     middleware: list[AgentMiddleware] = [build_context_middleware(model)]
     if memory_middleware is not None:
         middleware.append(memory_middleware)
