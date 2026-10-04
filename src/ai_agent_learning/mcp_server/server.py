@@ -1,31 +1,52 @@
 """法律检索 MCP Server 的 stdio 与 HTTP 入口。"""
 
 import argparse
+import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Annotated, Any
 
 from dotenv import load_dotenv
 from mcp.server import MCPServer
 from pydantic import Field
 
-from ai_agent_learning.mcp_server.search_raws import (
+from ai_agent_learning.mcp_server.search_laws import (
     TOOL_DESCRIPTION,
     RetrievalCase,
-    search_laws,
+    search_laws as retrieve_laws,
 )
 from ai_agent_learning.model_config import source_config_path
+from ai_agent_learning.qdrant_server import QdrantServer
 
-server = MCPServer("agent100-law-search")
+
+@asynccontextmanager
+async def lifespan(app: MCPServer) -> AsyncIterator[None]:
+    """复用已运行的 Qdrant；必要时启动本机服务，并清理自建进程。"""
+    load_dotenv(source_config_path(), override=False)
+    qdrant = QdrantServer()
+    try:
+        await qdrant.start()
+        yield
+    finally:
+        await qdrant.close()
 
 
-@server.tool(name="search_raws", description=TOOL_DESCRIPTION)
-async def search_raws(
+server = MCPServer("agent100-law-search", lifespan=lifespan)
+
+
+@server.tool(name="search_laws", description=TOOL_DESCRIPTION)
+async def search_laws(
     retrieval_cases: Annotated[
         list[RetrievalCase],
         Field(min_length=1, max_length=5, description="本次要并行检索的 1 至 5 个不同法律争议点。"),
     ],
 ) -> dict[str, Any]:
     """检索最多五个法律争议点。"""
-    return await search_laws(retrieval_cases)
+    try:
+        return await retrieve_laws(retrieval_cases)
+    except Exception:
+        logging.getLogger(__name__).exception("search_laws 检索失败")
+        raise
 
 
 def main() -> None:

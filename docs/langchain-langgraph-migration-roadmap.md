@@ -190,7 +190,7 @@ src/ai_agent_learning/
 
 1. `current_time`
 2. `search_memory`
-3. `search_raws`
+3. `search_laws`
 4. `web_search`
 5. `send_email`
 6. `run_command`

@@ -9,7 +9,7 @@ from typing import Any
 
 from dotenv import load_dotenv
 
-from ai_agent_learning.langchain_agent.tools.search_raws import handler
+from ai_agent_learning.langchain_agent.tools.search_laws import handler
 from ai_agent_learning.paths import get_data_dir
 from ai_agent_learning.qdrant_server import QdrantServer
 

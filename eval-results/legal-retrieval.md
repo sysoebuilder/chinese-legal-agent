@@ -15,7 +15,7 @@
 | 平均每题耗时 | 419.4 毫秒 |
 
 每题标注一个目标法规条款。目标条款进入前 K 条结果即视为该题 Recall@K 命中。
-评测通过实际 `search_raws` 路径执行，包括 GLM Embedding、Qdrant 向量召回、标题与正文 BM25S 召回以及当前的结果合并逻辑。
+评测通过实际 `search_laws` 路径执行，包括 GLM Embedding、Qdrant 向量召回、标题与正文 BM25S 召回以及当前的结果合并逻辑。
 
 ## 逐题首个相关结果排名
 

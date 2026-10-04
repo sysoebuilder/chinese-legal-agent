@@ -22,7 +22,7 @@ from ai_agent_learning.langchain_agent.legal.state import (
     LegalDecision,
     RetrievedLaw,
 )
-from ai_agent_learning.langchain_agent.tools import search_raws_tool
+from ai_agent_learning.langchain_agent.tools import search_laws_tool
 from ai_agent_learning.retry import retry_async
 
 MAX_RETRIEVAL_ROUNDS = 50
@@ -37,7 +37,7 @@ class LegalNodes:
     def __init__(
         self,
         model: BaseChatModel,
-        law_tool: BaseTool = search_raws_tool,
+        law_tool: BaseTool = search_laws_tool,
     ) -> None:
         self.model = model
         self.law_tool = law_tool

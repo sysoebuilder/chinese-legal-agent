@@ -7,16 +7,26 @@ from mcp import Client
 from ai_agent_learning.mcp_server import server as server_module
 
 
-def test_search_raws_mcp_registration_and_call(monkeypatch) -> None:
+def test_search_laws_mcp_registration_and_call(monkeypatch) -> None:
+    lifecycle = []
+
+    class FakeQdrantServer:
+        async def start(self):
+            lifecycle.append("start")
+
+        async def close(self):
+            lifecycle.append("close")
+
+    monkeypatch.setattr(server_module, "QdrantServer", FakeQdrantServer)
     async def fake_search_laws(cases):
         return {"results": [{"issue": cases[0].issue, "laws": []}]}
 
-    monkeypatch.setattr(server_module, "search_laws", fake_search_laws)
+    monkeypatch.setattr(server_module, "retrieve_laws", fake_search_laws)
 
     async def scenario() -> None:
         async with Client(server_module.server) as client:
             tools = await client.list_tools()
-            assert [tool.name for tool in tools.tools] == ["search_raws"]
+            assert [tool.name for tool in tools.tools] == ["search_laws"]
             case_schema = tools.tools[0].input_schema["properties"]["retrieval_cases"]
             assert case_schema["minItems"] == 1
             assert case_schema["maxItems"] == 5
@@ -27,7 +37,7 @@ def test_search_raws_mcp_registration_and_call(monkeypatch) -> None:
                 for field in ("issue", "title_keywords", "content_keywords", "case_facts")
             )
             result = await client.call_tool(
-                "search_raws",
+                "search_laws",
                 {
                     "retrieval_cases": [
                         {
@@ -45,3 +55,28 @@ def test_search_raws_mcp_registration_and_call(monkeypatch) -> None:
             }
 
     asyncio.run(scenario())
+    assert lifecycle == ["start", "close"]
+
+
+def test_qdrant_start_failure_cleans_up(monkeypatch) -> None:
+    import pytest
+
+    lifecycle = []
+
+    class FailedQdrantServer:
+        async def start(self):
+            lifecycle.append("start")
+            raise RuntimeError("Qdrant 启动失败")
+
+        async def close(self):
+            lifecycle.append("close")
+
+    monkeypatch.setattr(server_module, "QdrantServer", FailedQdrantServer)
+
+    async def scenario():
+        with pytest.raises(RuntimeError, match="Qdrant 启动失败"):
+            async with server_module.lifespan(server_module.server):
+                pytest.fail("Qdrant 未就绪时不应接受调用")
+
+    asyncio.run(scenario())
+    assert lifecycle == ["start", "close"]
