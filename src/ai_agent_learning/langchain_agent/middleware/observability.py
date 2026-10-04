@@ -32,7 +32,6 @@ class ToolLoggingMiddleware(AgentMiddleware):
         configurable = config.get("configurable") or {}
         metadata = config.get("metadata") or {}
         fields = {
-            "session_id": configurable.get("thread_id"),
             "trace_id": metadata.get("trace_id"),
             "tool_name": tool_name,
             "tool_call_id": tool_call_id,
