@@ -24,10 +24,13 @@ def test_new_chat_exit_before_first_message_does_not_create_session(monkeypatch,
     created = []
     closed = []
     mcp_tools = [object()]
+    postgres_connection = object()
+    postgres_checkpointer = SimpleNamespace(conn=postgres_connection)
+    setup = []
 
     class FakeSessionStore:
         def __init__(self, connection):
-            pass
+            assert connection is postgres_connection
 
         async def list_sessions(self):
             return []
@@ -66,11 +69,21 @@ def test_new_chat_exit_before_first_message_does_not_create_session(monkeypatch,
             closed.append("memory")
 
     @asynccontextmanager
-    async def fake_checkpointer(_):
+    async def fake_session_store(url):
         try:
-            yield SimpleNamespace(conn=object())
+            assert url == "postgresql://localhost/test"
+            yield FakeSessionStore(postgres_connection)
         finally:
-            closed.append("sqlite")
+            closed.append("sessions")
+
+    @asynccontextmanager
+    async def fake_checkpointer(url):
+        assert url == "postgresql://localhost/test"
+        setup.append("postgres")
+        try:
+            yield postgres_checkpointer
+        finally:
+            closed.append("postgres")
 
     @asynccontextmanager
     async def fake_connect_servers(**kwargs):
@@ -82,30 +95,31 @@ def test_new_chat_exit_before_first_message_does_not_create_session(monkeypatch,
 
     def fake_create_agent(*args, **kwargs):
         assert kwargs["mcp_tools"] is mcp_tools
+        assert kwargs["checkpointer"] is postgres_checkpointer
         return object()
 
     monkeypatch.setattr("builtins.input", lambda _: "0")
-    monkeypatch.setattr(run_module, "get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr(run_module, "get_database_url", lambda: "postgresql://localhost/test")
+    monkeypatch.setattr(run_module, "migrate_database", lambda _: None)
     monkeypatch.setattr(run_module, "configure_logging", lambda _: None)
     monkeypatch.setattr(run_module, "shutdown_logging", lambda: None)
     monkeypatch.setattr(run_module, "load_active_model", lambda: SimpleNamespace(model="test"))
-    monkeypatch.setattr(run_module, "load_dotenv", lambda *args, **kwargs: None)
     monkeypatch.setattr(run_module, "QdrantServer", FakeServer)
     monkeypatch.setattr(run_module, "TerminalUI", FakeUI)
-    monkeypatch.setattr(run_module, "SqliteSessionStore", FakeSessionStore)
     monkeypatch.setattr(run_module, "MemoryWorker", FakeWorker)
     monkeypatch.setattr(run_module, "create_langchain_model", lambda _: object())
     monkeypatch.setattr(run_module, "create_new_chat_agent", fake_create_agent)
     monkeypatch.setattr(run_module, "connect_servers", fake_connect_servers)
     monkeypatch.setattr(run_module, "CLOUD_MCP_SERVERS", {"remote": {"url": "https://remote.example/mcp"}})
-    monkeypatch.setattr(
-        run_module.AsyncSqliteSaver, "from_conn_string", fake_checkpointer
-    )
+    monkeypatch.setenv("CHECKPOINT_DATABASE_URL", "postgresql://localhost/test")
+    monkeypatch.setattr(run_module, "open_session_store", fake_session_store)
+    monkeypatch.setattr(run_module, "open_checkpointer", fake_checkpointer)
 
     asyncio.run(chat_module.run_new_chat())
 
     assert created == []
-    assert closed == ["memory", "mcp", "sqlite", "qdrant"]
+    assert setup == ["postgres"]
+    assert closed == ["memory", "mcp", "postgres", "sessions", "qdrant"]
 
 
 def test_create_langchain_model_uses_deepseek_adapter(monkeypatch):
