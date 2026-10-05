@@ -21,7 +21,7 @@ Version **0.5.0** · Python **3.11+** · Command **`agent100`**
 
 | 能力 | 实现内容 |
 | --- | --- |
-| 多轮对话 | GLM / DeepSeek 流式输出、终端 Markdown 展示、SQLite 会话与 LangGraph 状态持久化 |
+| 多轮对话 | GLM / DeepSeek 流式输出、终端 Markdown 展示、PostgreSQL 会话与 LangGraph 状态持久化 |
 | Agent 循环 | LangGraph 驱动模型调用、工具执行、结果回传、中断与恢复 |
 | 工具系统 | LangChain `StructuredTool` 统一参数模型和异步调用 |
 | 内置工具 | 当前时间、基于 GLM 搜索引擎的网络搜索、QQ SMTP 邮件发送、Windows PowerShell 命令执行 |
@@ -74,7 +74,16 @@ python -m venv .venv
 
 Web Search 功能基于 GLM 搜索引擎实现，长期记忆使用 GLM Embedding-3 生成向量，两项功能都必须配置 GLM API Key（环境变量名为 `ZAI_API_KEY`）；即使当前对话模型选择 DeepSeek，该配置仍不可省略。邮件工具另需配置 `QQ_SMTP_USERNAME` 和 `QQ_SMTP_AUTH_CODE`，后者是 SMTP 授权码，不是邮箱登录密码。模型、搜索和向量化调用使用你自己的服务账号，可能产生费用。
 
-会话、LangGraph checkpoint 和结构化日志统一保存在 `data/langgraph-checkpoints.sqlite`，日志位于其中的 `logs` 表；Qdrant 记忆库也默认位于本地 `data/`。可用 `LLM_CLI_DATA_DIR` 指定其他目录。输入 `exit` 或 `quit` 时，程序会等待已入队的记忆任务处理完成。不要提交真实 `.env`、个人会话或记忆数据。
+所有会话的 LangGraph checkpoint 使用 PostgreSQL，在 `data/.env` 中设置 `CHECKPOINT_DATABASE_URL`，例如 `postgresql://agent100:<密码>@127.0.0.1:5432/agent100?connect_timeout=10`。程序首次连接时由官方 checkpointer 创建并升级所需表。Windows 使用线程调用官方同步 `PostgresSaver`，保留命令执行和 stdio MCP 所需的默认事件循环；其他平台使用 `AsyncPostgresSaver`。
+
+会话目录 `sessions`、结构化日志 `logs` 和 checkpoint 全部保存在同一个 PostgreSQL 数据库中。会话和 checkpoint 使用同一个 `thread_id` 关联；日志通过 `session_id`、`trace_id` 查询关联事件，`details_json` 使用 JSONB。启动聊天时自动运行 Alembic 升级业务表；也可单独运行 `.\.venv\Scripts\python.exe -m ai_agent_learning.database`。SQLite 存储及旧会话回退已移除，不导入旧数据。法规和长期记忆仍使用当前 Qdrant 服务，数据位于 `data/qdrant-server/`；历史嵌入式 Qdrant 目录不再使用。可用 `LLM_CLI_DATA_DIR` 指定其他目录。输入 `exit` 或 `quit` 时，程序会等待已入队的记忆任务处理完成。不要提交真实 `.env`、个人会话或记忆数据。
+
+本机已初始化项目内 PostgreSQL 时，可用以下脚本启动或停止。数据库仅监听 `127.0.0.1:5432`，运行文件位于 `data/postgresql/`，数据库文件位于 `data/postgres-db/`；重启电脑后需先启动数据库。脚本支持 `-DataDirectory` 指定其他数据目录。
+
+```powershell
+.\scripts\start-postgres.ps1
+.\scripts\stop-postgres.ps1
+```
 
 ### 代码导航
 
@@ -114,7 +123,7 @@ If you are hiring Agent developers, please contact me at [1774364027w@gmail.com]
 
 | Capability | Implementation |
 | --- | --- |
-| Multi-turn chat | GLM / DeepSeek streaming, terminal Markdown rendering, SQLite sessions, and LangGraph checkpoints |
+| Multi-turn chat | GLM / DeepSeek streaming, terminal Markdown rendering, PostgreSQL sessions, and LangGraph checkpoints |
 | Agent loop | LangGraph model/tool execution with interrupts and resume support |
 | Tool system | LangChain `StructuredTool` adapters with typed arguments and async execution |
 | Built-in tools | Current time, GLM-powered web search, QQ SMTP email, and Windows PowerShell commands |
@@ -149,7 +158,9 @@ On the first `agent100 config` run, the program detects that configuration is mi
 
 Web Search is powered by the GLM search engine, and long-term memory uses GLM Embedding-3 for vectors. Both require a GLM API key (`ZAI_API_KEY`), even when DeepSeek is selected as the chat model. Email requires `QQ_SMTP_USERNAME` and `QQ_SMTP_AUTH_CODE` (an SMTP authorization code, not your mailbox password). Model, search, and embedding requests use your own service account and may incur charges.
 
-Sessions, LangGraph checkpoints, and structured logs share `data/langgraph-checkpoints.sqlite`; logs are stored in its `logs` table. The Qdrant memory database also lives under `data/` by default. Set `LLM_CLI_DATA_DIR` to override the location. On `exit` or `quit`, the program waits for queued memory jobs to finish. Keep real `.env` files, personal sessions, and memory data out of version control. The current terminal interface is primarily in Chinese.
+All sessions use PostgreSQL checkpoints, configured through `CHECKPOINT_DATABASE_URL` in `data/.env`. The official checkpointer initializes and upgrades its own tables. Windows runs the synchronous `PostgresSaver` in worker threads to preserve subprocess support; other platforms use `AsyncPostgresSaver`.
+
+Sessions (`sessions`), structured logs (`logs`), and checkpoints all use the same PostgreSQL database. Sessions and checkpoints share `thread_id`; logs expose `session_id`, `trace_id`, and JSONB `details_json`. Chat startup runs Alembic migrations for business tables automatically; run `.\.venv\Scripts\python.exe -m ai_agent_learning.database` to upgrade them separately. SQLite storage and legacy session fallback have been removed, without importing historical data. Laws and long-term memories continue to use the current Qdrant server in `data/qdrant-server/`; obsolete embedded Qdrant stores are no longer used. Set `LLM_CLI_DATA_DIR` to override the location. A project-local PostgreSQL installation can be started with `scripts/start-postgres.ps1` and stopped with `scripts/stop-postgres.ps1`; start it again after rebooting Windows. On `exit` or `quit`, the program waits for queued memory jobs to finish. Keep real `.env` files, personal sessions, and memory data out of version control. The current terminal interface is primarily in Chinese.
 
 ### Code map and development
 
