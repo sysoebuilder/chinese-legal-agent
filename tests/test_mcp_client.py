@@ -118,6 +118,7 @@ def test_cloud_servers_discovery_failure_preserves_other_connections(monkeypatch
 
 def test_mixed_servers_connection_failure_preserves_local(monkeypatch):
     from mcp import StdioServerParameters
+
     from ai_agent_learning import mcp_client
 
     closed = []
@@ -195,6 +196,7 @@ def test_cloud_server_passes_auth_headers_and_closes_http_client(monkeypatch):
 
 def test_connect_servers_uses_headers_from_cloud_config(monkeypatch):
     from contextlib import asynccontextmanager
+
     from ai_agent_learning import mcp_client
 
     observed = []
@@ -203,7 +205,7 @@ def test_connect_servers_uses_headers_from_cloud_config(monkeypatch):
 
     @asynccontextmanager
     async def fake_connect(url, *, headers, **kwargs):
-        observed.append((url, headers))
+        observed.append((url, headers, kwargs))
         yield object()
 
     async def fake_tools(client):
@@ -215,10 +217,10 @@ def test_connect_servers_uses_headers_from_cloud_config(monkeypatch):
     async def scenario():
         async with mcp_client.connect_servers(cloud_servers={
             "missing": {"url": "https://missing.example/mcp", "headers": {"Authorization": "Bearer ${TEST_MCP_MISSING}"}},
-            "github": {"url": "https://api.githubcopilot.com/mcp/", "headers": {"Authorization": "Bearer ${TEST_MCP_TOKEN}", "X-Custom": "custom"}},
+            "github": {"url": "https://api.githubcopilot.com/mcp/", "headers": {"Authorization": "Bearer ${TEST_MCP_TOKEN}", "X-Custom": "custom"}, "read_timeout_seconds": 330, "trust_env": False},
         }) as connections:
             assert list(connections.clients) == ["github"]
             assert "TEST_MCP_MISSING" in connections.errors["missing"]
 
     asyncio.run(scenario())
-    assert observed == [("https://api.githubcopilot.com/mcp/", {"Authorization": "Bearer test-token", "X-Custom": "custom"})]
+    assert observed == [("https://api.githubcopilot.com/mcp/", {"Authorization": "Bearer test-token", "X-Custom": "custom"}, {"read_timeout_seconds": 330, "trust_env": False})]

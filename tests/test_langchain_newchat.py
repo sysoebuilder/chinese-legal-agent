@@ -1,16 +1,18 @@
 import asyncio
+import os
 from contextlib import asynccontextmanager
 from io import StringIO
 from types import SimpleNamespace
 
+import pytest
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 from pydantic import SecretStr
 from rich.console import Console
 
 from ai_agent_learning.langchain_agent import chat as chat_module
-from ai_agent_learning.langchain_agent import runtime
 from ai_agent_learning.langchain_agent import run as run_module
+from ai_agent_learning.langchain_agent import runtime
 from ai_agent_learning.langchain_agent.chat import (
     _new_turn_config,
     _resume_pending_turn,
@@ -20,7 +22,8 @@ from ai_agent_learning.model_config import ModelConfig
 from ai_agent_learning.ui.terminal import TerminalUI
 
 
-def test_new_chat_exit_before_first_message_does_not_create_session(monkeypatch, tmp_path):
+@pytest.mark.parametrize("system_name", ["nt", "posix"])
+def test_new_chat_exit_before_first_message_does_not_create_session(monkeypatch, tmp_path, system_name):
     created = []
     closed = []
     mcp_tools = [object()]
@@ -87,7 +90,13 @@ def test_new_chat_exit_before_first_message_does_not_create_session(monkeypatch,
 
     @asynccontextmanager
     async def fake_connect_servers(**kwargs):
-        assert kwargs["cloud_servers"] == {"remote": {"url": "https://remote.example/mcp"}}
+        assert kwargs["cloud_servers"]["remote"] == {"url": "https://remote.example/mcp"}
+        assert ("windows_terminal" in kwargs["cloud_servers"]) is (system_name != "nt")
+        if system_name != "nt":
+            terminal = kwargs["cloud_servers"]["windows_terminal"]
+            assert terminal["url"] == "http://host.docker.internal:8765/mcp"
+            assert terminal["read_timeout_seconds"] == 330
+            assert terminal["trust_env"] is False
         try:
             yield SimpleNamespace(tools=mcp_tools, errors={})
         finally:
@@ -111,6 +120,7 @@ def test_new_chat_exit_before_first_message_does_not_create_session(monkeypatch,
     monkeypatch.setattr(run_module, "create_new_chat_agent", fake_create_agent)
     monkeypatch.setattr(run_module, "connect_servers", fake_connect_servers)
     monkeypatch.setattr(run_module, "CLOUD_MCP_SERVERS", {"remote": {"url": "https://remote.example/mcp"}})
+    monkeypatch.setenv("WINDOWS_MCP_URL", "http://host.docker.internal:8765/mcp")
     monkeypatch.setenv("CHECKPOINT_DATABASE_URL", "postgresql://localhost/test")
     monkeypatch.setattr(run_module, "open_session_store", fake_session_store)
     monkeypatch.setattr(run_module, "open_checkpointer", fake_checkpointer)

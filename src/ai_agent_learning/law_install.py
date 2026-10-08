@@ -3,6 +3,7 @@
 import asyncio
 import hashlib
 import json
+import os
 import shutil
 import sqlite3
 import zipfile
@@ -244,7 +245,8 @@ def _install_sync() -> None:
                 "raw_prepared": False,
             }
             _dump(state_path, state)
-        with closing(QdrantClient(url=DEFAULT_QDRANT_URL, timeout=120)) as client:
+        qdrant_url = (os.getenv("QDRANT_URL") or DEFAULT_QDRANT_URL).strip()
+        with closing(QdrantClient(url=qdrant_url, timeout=120)) as client:
             _validate_collection(client)
             current = client.count(COLLECTION, exact=True).count
             index_manifest = data_dir / INDEX_DIR / "manifest.json"

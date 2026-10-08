@@ -18,6 +18,7 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.types import Command, Interrupt
 from openai import APIStatusError
 
+from ai_agent_learning.langchain_agent.checkpoint import has_pending_turn
 from ai_agent_learning.langchain_agent.session import (
     create_session_name,
 )
@@ -54,9 +55,7 @@ async def stream_agent_turn(
 ) -> list[AnyMessage]:
     """流式执行一轮 Agent，并返回包含工具往返的完整消息历史。"""
     agent_input: dict[str, list[AnyMessage]] | Command | None = (
-        {"messages": [HumanMessage(content=content)]}
-        if content is not None
-        else None
+        {"messages": [HumanMessage(content=content)]} if content is not None else None
     )
     latest_messages: list[AnyMessage] | None = None
 
@@ -91,7 +90,10 @@ async def stream_agent_turn(
                 text = message.text
                 if text and "legal_structured" not in metadata.get("tags", []):
                     ui.text_delta(text)
-            elif isinstance(message, AIMessage) and metadata.get("langgraph_node") == "refuse":
+            elif (
+                isinstance(message, AIMessage)
+                and metadata.get("langgraph_node") == "refuse"
+            ):
                 # 拒答是节点生成的固定提示，不经过模型流式调用。
                 ui.text_delta(message.text)
             elif isinstance(message, ToolMessage):
@@ -133,7 +135,7 @@ async def _resume_pending_turn(
         metadata={"trace_id": trace_id},
     )
     snapshot = await agent.aget_state(turn_config)
-    if not snapshot.next:
+    if not has_pending_turn(snapshot):
         return None
     if confirm and not await asyncio.to_thread(ui.confirm_resume):
         ui.show_notice("已跳过断点恢复，可以输入新消息继续对话。")
@@ -211,9 +213,7 @@ async def _review_interrupt(
             "用户已处理工具确认请求",
             extra={
                 "event": (
-                    "tool.approval.approved"
-                    if approved
-                    else "tool.approval.rejected"
+                    "tool.approval.approved" if approved else "tool.approval.rejected"
                 ),
                 "approved": approved,
                 **log_fields,
@@ -228,7 +228,9 @@ async def _review_interrupt(
     return {"decisions": decisions}
 
 
-async def run_chat_loop(agent, model, config, ui, session_store, session, memory_worker) -> None:
+async def run_chat_loop(
+    agent, model, config, ui, session_store, session, memory_worker
+) -> None:
     """处理会话恢复、用户输入和对话轮次；资源由调用方管理。"""
     ui.show_header(config.model, session.name if session else "")
     resumed_messages = None

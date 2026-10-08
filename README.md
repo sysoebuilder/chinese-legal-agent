@@ -35,7 +35,7 @@ Version **0.5.0** · Python **3.11+** · Command **`agent100`**
 
 ### 快速开始
 
-项目根目录可通过 `.\.venv\Scripts\python.exe run.py` 启动聊天。主流程在 `src/ai_agent_learning/langchain_agent/run.py` 中统一创建 Agent 并管理资源，`chat.py` 负责对话循环和流式事件处理。
+聊天在 Compose worker 中运行，复用卷中的数据库、法律资源和 BM25 索引。主流程在 `src/ai_agent_learning/langchain_agent/run.py` 中统一创建 Agent 并管理资源，`chat.py` 负责对话循环和流式事件处理。
 
 以下使用 Windows PowerShell。当前命令执行工具仅支持 Windows；工作目录不构成文件访问沙箱。
 
@@ -51,39 +51,69 @@ python -m venv .venv
 ```powershell
 .\.venv\Scripts\agent100.exe --version
 .\.venv\Scripts\agent100.exe config
-.\.venv\Scripts\agent100.exe newchat
+docker compose up -d --build --wait
+docker compose run --rm worker agent100 chat
 ```
 
-`newchat` 是当前唯一的聊天入口，提供多轮持久化会话、流式终端输出、工具审批、上下文摘要与异步记忆整理。
+`chat` 是终端聊天入口，提供多轮持久化会话、流式终端输出、工具审批、上下文摘要与异步记忆整理；网页聊天入口见下方 Run API 说明。首次创建空卷时需要先恢复数据备份，步骤见 [部署说明](docs/run-api.md)。
 
 法律检索另有独立的 stdio MCP Server，可供 MCP Host 启动并发现 `search_laws` 工具：
 
 ```powershell
-.\.venv\Scripts\python.exe -m ai_agent_learning.mcp_server
+docker compose run --rm -T --no-deps worker python -m ai_agent_learning.mcp_server
 ```
 
 要让其他计算机通过 IP 和端口连接，可启动 Streamable HTTP：
 
 ```powershell
-.\.venv\Scripts\python.exe -m ai_agent_learning.mcp_server --http --host 0.0.0.0 --port 8000
+docker compose run --rm --no-deps -p 8000:8000 worker python -m ai_agent_learning.mcp_server --http --host 0.0.0.0 --port 8000
 ```
 
 远端 MCP 地址为 `http://<公网 IP>:8000/mcp`。若本机在路由器后面，还需要将公网端口转发至这台计算机，并允许该端口通过主机防火墙；HTTP 模式目前不设鉴权。
 
-它暂时复用当前项目的 `data/law-bm25` 索引、Qdrant `npc_laws` 集合和 `data/.env` 中的 `ZAI_API_KEY`；默认连接 `http://127.0.0.1:6333`，也可用 `QDRANT_URL`、`LLM_CLI_DATA_DIR` 覆盖。MCP Server 启动时会检查 Qdrant：已有服务可用时直接复用，默认本机服务不可用时自动启动，并在退出时关闭自行启动的进程；远程地址不可用时报告错误。原有 LangChain 法律检索工具仍可使用。
+法律检索复用 Compose 应用数据卷中的 BM25 索引和 Qdrant `npc_laws` 集合；模型与工具凭据继续读取主机 `data/.env`。先启动 Compose 数据库，在容器中运行法律 MCP 或聊天程序。Qdrant 不可用时报告错误，不再自动创建本机数据库。
 
 Web Search 功能基于 GLM 搜索引擎实现，长期记忆使用 GLM Embedding-3 生成向量，两项功能都必须配置 GLM API Key（环境变量名为 `ZAI_API_KEY`）；即使当前对话模型选择 DeepSeek，该配置仍不可省略。邮件工具另需配置 `QQ_SMTP_USERNAME` 和 `QQ_SMTP_AUTH_CODE`，后者是 SMTP 授权码，不是邮箱登录密码。模型、搜索和向量化调用使用你自己的服务账号，可能产生费用。
 
 所有会话的 LangGraph checkpoint 使用 PostgreSQL，在 `data/.env` 中设置 `CHECKPOINT_DATABASE_URL`，例如 `postgresql://agent100:<密码>@127.0.0.1:5432/agent100?connect_timeout=10`。程序首次连接时由官方 checkpointer 创建并升级所需表。Windows 使用线程调用官方同步 `PostgresSaver`，保留命令执行和 stdio MCP 所需的默认事件循环；其他平台使用 `AsyncPostgresSaver`。
 
-会话目录 `sessions`、结构化日志 `logs` 和 checkpoint 全部保存在同一个 PostgreSQL 数据库中。会话和 checkpoint 使用同一个 `thread_id` 关联；日志通过 `session_id`、`trace_id` 查询关联事件，`details_json` 使用 JSONB。启动聊天时自动运行 Alembic 升级业务表；也可单独运行 `.\.venv\Scripts\python.exe -m ai_agent_learning.database`。SQLite 存储及旧会话回退已移除，不导入旧数据。法规和长期记忆仍使用当前 Qdrant 服务，数据位于 `data/qdrant-server/`；历史嵌入式 Qdrant 目录不再使用。可用 `LLM_CLI_DATA_DIR` 指定其他目录。输入 `exit` 或 `quit` 时，程序会等待已入队的记忆任务处理完成。不要提交真实 `.env`、个人会话或记忆数据。
+会话、结构化日志和 checkpoint 保存在 PostgreSQL；法规和长期记忆保存在 Qdrant。数据库服务全部由 Compose 管理，数据位于 Docker 命名卷：`agent100_postgres`、`agent100_qdrant`、`agent100_redis-data`。BM25 索引位于 `agent100_app-data`，法律离线资源位于 `agent100_law-assets`。主机保留配置、MCP 运行日志和 `data/backups/` 快照。旧工作库已移出项目，暂存文件的删除状态见 [迁移记录](docs/reports/2026-10-07-container-storage-status.md)。程序退出不停止数据库，不再自动启动原生数据库。
 
-本机已初始化项目内 PostgreSQL 时，可用以下脚本启动或停止。数据库仅监听 `127.0.0.1:5432`，运行文件位于 `data/postgresql/`，数据库文件位于 `data/postgres-db/`；重启电脑后需先启动数据库。脚本支持 `-DataDirectory` 指定其他数据目录。
+以下脚本启动或停止 Compose 中的 PostgreSQL，保留命名卷中的数据；数据库映射到 `127.0.0.1:5432`。
 
 ```powershell
 .\scripts\start-postgres.ps1
 .\scripts\stop-postgres.ps1
 ```
+
+### Run API 与 SSE
+
+新增 FastAPI 运行入口：创建和查询运行，通过 SSE 接收模型思考、回答及工具审批/补充信息中断；客户端提交回应后从现有 checkpoint 恢复。Redis + Celery 调度任务，PostgreSQL 保存运行和可重连事件。终端模型配置和聊天入口继续可用。
+
+安装 Python 3.11+ 并打开 Docker Desktop，在项目根目录运行 `./scripts/start-compose.ps1`。脚本会自动创建 Windows 本机 `.venv`、根据 `pyproject.toml` 安装依赖和 MCP provider，再执行 `docker compose up -d --build --wait`，启动 API、Celery worker、PostgreSQL、Redis 和 Qdrant。首次使用不用手动创建 `.venv` 或执行 pip；依赖声明没有改变时会跳过重复安装。`-PrepareOnly` 只准备本机 Python 环境，`-SkipBuild` 使用已有容器镜像，`-Reinstall` 强制重跑依赖安装。已有模型配置直接复用 `data/` 下的配置文件。容器 Worker 需要 NVIDIA GPU，使用 CUDA 12.8 版 PyTorch 和 float16 加速本地 BGE 重排模型。
+
+Compose 的 PostgreSQL、Redis、Qdrant 分别映射到本机 `127.0.0.1:5432`、`127.0.0.1:6379`、`127.0.0.1:6333`，容器通过服务名连接。运行 `docker compose up -d --build --wait` 直接复用命名卷；`docker compose down` 保留数据，`down -v` 会删除数据卷。在容器中运行终端聊天：`docker compose run --rm worker agent100 chat`。备份：`python scripts/backup-data.py`，数据库快照、BM25 索引和资源归档统一保存在 `data/backups/<时间>/`。恢复步骤见 [部署说明](docs/run-api.md)。
+
+Linux worker 通过 Windows 本机 MCP 执行 PowerShell。Windows 上的 Compose（2.36.0 或更新版本）通过 `windows_terminal` provider 自动启动宿主机 MCP，等认证就绪检查通过后再启动 worker。本机环境由 `start-compose.ps1` 自动准备，准备好后也可以直接使用 `docker compose up -d --build --wait`。无需单独开终端启动 MCP。首次启动会生成 `WINDOWS_MCP_TOKEN` 并把 `WINDOWS_MCP_URL=http://host.docker.internal:8765/mcp` 写入 `data/.env`；已有配置保留。服务仅监听 `127.0.0.1:8765`，初始化、发现和调用都要求 Bearer token。
+
+服务及其执行的 PowerShell 命令均隐藏窗口运行，Compose 启动完成后可以关闭启动终端。重复 `compose up` 会复用同一进程；`docker compose down` 会停止 MCP，支持 provider stop 的 Compose 版本也可用 `docker compose stop`。MCP 进程状态和日志位于 `data/compose-mcp/`，`docker compose ps` 中不会显示一个 MCP 容器。进程异常退出后重新运行 `compose up` 即可恢复。原有 `./scripts/start-mcp-terminal.ps1` 保留用于手动调试；切换为 Compose 管理前需停止手动启动的 MCP，避免端口占用。Linux 主机部署时应移除这个 Windows provider 及 worker 对它的依赖，并配置独立的 Windows MCP 地址。
+
+服务及启停管理都在 `src/ai_agent_learning/mcp_terminal.py`。不使用脚本或 Compose 时，在项目根目录执行：
+
+```powershell
+# 默认在后台启动；加 start 也可以。
+.\.venv\Scripts\python.exe -m ai_agent_learning.mcp_terminal
+# 停止后台服务。
+.\.venv\Scripts\python.exe -m ai_agent_learning.mcp_terminal stop
+# 前台调试，占用当前终端，Ctrl+C 停止。
+.\.venv\Scripts\python.exe -m ai_agent_learning.mcp_terminal serve --configure
+```
+
+也可以直接运行该文件：`.\.venv\Scripts\python.exe src/ai_agent_learning/mcp_terminal.py start`。`start` 用独立后台 `pythonw.exe` 进程运行同一文件的 `serve` 模式，认证就绪后启动命令退出；启动器及实际解释器均无需控制台，后台进程脱离启动器的 Windows Job，输出写入日志。`serve` 只运行 HTTP 服务，不再次创建子进程。Compose 的 provider 程序也是该模块的入口，使用 `compose up/down/stop` 参数适配 Compose 的调用格式。
+
+worker 中的工具名是 `windows_terminal__run_command`，`working_directory` 必须填写 Windows 上已有目录的绝对路径（例如 `E:\ai-agent-100-days-learning`）。执行复用现有终端工具，保留 1–300 秒超时、输出限制及子进程清理。配置了终端 MCP 而服务不可用时，任务会报告连接错误。Windows 的 `open_chat_agent` 会剔除该 MCP，继续使用内置 `run_command`。`WINDOWS_MCP_URL` 留空时不接入终端 MCP；token 允许执行当前 Windows 用户权限内的命令，应保存在本机配置中。
+
+启动与接口示例见 [Run API 使用说明](docs/run-api.md)。React + TypeScript + Vite 前端独立部署在 `http://127.0.0.1:3000/`，API 默认监听 `127.0.0.1:8001`，交互接口说明位于 `http://127.0.0.1:8001/docs`。Compose 同时启动前端与后端；FastAPI 不提供页面或静态资源。网页与终端共用会话历史，支持实时思考/回答、工具审批、补充信息、停止生成和历史分页。前端开发与组件说明见 [frontend/README.md](frontend/README.md)。容器数据库使用独立持久卷，本机历史数据需要另行迁移；Windows 命令工具在 Linux 容器中不注册。
 
 ### 代码导航
 
@@ -151,16 +181,17 @@ On the first `agent100 config` run, the program detects that configuration is mi
 ```powershell
 .\.venv\Scripts\agent100.exe --version
 .\.venv\Scripts\agent100.exe config
-.\.venv\Scripts\agent100.exe newchat
+docker compose up -d --build --wait
+docker compose run --rm worker agent100 chat
 ```
 
-`newchat` is the only chat entry point. It provides persistent multi-turn sessions, terminal streaming, tool approval, context summarization, and background memory processing.
+`chat` provides persistent multi-turn sessions, terminal streaming, tool approval, context summarization, and background memory processing. Restore a backup before using new empty volumes; see [deployment and recovery](docs/run-api.md).
 
 Web Search is powered by the GLM search engine, and long-term memory uses GLM Embedding-3 for vectors. Both require a GLM API key (`ZAI_API_KEY`), even when DeepSeek is selected as the chat model. Email requires `QQ_SMTP_USERNAME` and `QQ_SMTP_AUTH_CODE` (an SMTP authorization code, not your mailbox password). Model, search, and embedding requests use your own service account and may incur charges.
 
 All sessions use PostgreSQL checkpoints, configured through `CHECKPOINT_DATABASE_URL` in `data/.env`. The official checkpointer initializes and upgrades its own tables. Windows runs the synchronous `PostgresSaver` in worker threads to preserve subprocess support; other platforms use `AsyncPostgresSaver`.
 
-Sessions (`sessions`), structured logs (`logs`), and checkpoints all use the same PostgreSQL database. Sessions and checkpoints share `thread_id`; logs expose `session_id`, `trace_id`, and JSONB `details_json`. Chat startup runs Alembic migrations for business tables automatically; run `.\.venv\Scripts\python.exe -m ai_agent_learning.database` to upgrade them separately. SQLite storage and legacy session fallback have been removed, without importing historical data. Laws and long-term memories continue to use the current Qdrant server in `data/qdrant-server/`; obsolete embedded Qdrant stores are no longer used. Set `LLM_CLI_DATA_DIR` to override the location. A project-local PostgreSQL installation can be started with `scripts/start-postgres.ps1` and stopped with `scripts/stop-postgres.ps1`; start it again after rebooting Windows. On `exit` or `quit`, the program waits for queued memory jobs to finish. Keep real `.env` files, personal sessions, and memory data out of version control. The current terminal interface is primarily in Chinese.
+Sessions, logs, and checkpoints use PostgreSQL; laws and long-term memory use Qdrant. Compose stores all database files in named Docker volumes (`agent100_postgres`, `agent100_qdrant`, `agent100_redis-data`). BM25 indexes use `agent100_app-data`, and offline law assets use `agent100_law-assets`. Host storage retains configuration, MCP logs, and backups under `data/backups/`. Old working directories have been moved outside the project; temporary copies still await deletion, as recorded in the [migration report](docs/reports/2026-10-07-container-storage-status.md). Run terminal chat inside the container with `docker compose run --rm worker agent100 chat`. Run `python scripts/backup-data.py` to save backups. `docker compose down` retains volumes; `down -v` deletes them. Qdrant no longer starts a native Windows database automatically.
 
 ### Code map and development
 

@@ -1,6 +1,7 @@
 """新版 LangChain Agent 的模型和运行图构建。"""
 
 from collections.abc import Sequence
+from typing import Any
 
 from langchain.agents import create_agent
 from langchain.agents.middleware import (
@@ -59,16 +60,18 @@ def create_langchain_model(config: ModelConfig) -> BaseChatModel:
         )
 
     if config.provider == "deepseek":
-        return ChatDeepSeek(
-            model=config.model,
-            api_key=SecretStr(config.api_key),
-            base_url=config.base_url,
-            streaming=True,
-            stream_usage=False,
-            timeout=30.0,
-            max_retries=2,
-            extra_body={"thinking": {"type": "enabled"}},
-        )
+        # Pydantic 在运行时校验继承字段；使用配置字典避免编辑器误判构造签名。
+        options: dict[str, Any] = {
+            "model": config.model,
+            "api_key": SecretStr(config.api_key),
+            "base_url": config.base_url,
+            "streaming": True,
+            "stream_usage": False,
+            "timeout": 30.0,
+            "max_retries": 2,
+            "extra_body": {"thinking": {"type": "enabled"}},
+        }
+        return ChatDeepSeek(**options)
 
     raise ValueError(f"不支持的模型提供商：{config.provider}")
 

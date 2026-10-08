@@ -1,5 +1,6 @@
 """候选配置来自数据目录 .env；运行时只使用 active-model.env 中的快照。"""
 
+import os
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -47,11 +48,18 @@ class ModelConfig:
 
 
 def source_config_path() -> Path:
-    return get_data_dir() / ".env"
+    return _config_dir() / ".env"
 
 
 def active_config_path() -> Path:
-    return get_data_dir() / "active-model.env"
+    return _config_dir() / "active-model.env"
+
+
+def _config_dir() -> Path:
+    configured = os.getenv("LLM_CLI_CONFIG_DIR")
+    directory = Path(configured).expanduser().resolve() if configured else get_data_dir()
+    directory.mkdir(parents=True, exist_ok=True)
+    return directory
 
 
 def create_model_config(provider: str, api_key: str, model: str = "") -> ModelConfig:

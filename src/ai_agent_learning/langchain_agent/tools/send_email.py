@@ -1,8 +1,8 @@
 """send_email 工具实现与 LangChain 注册。"""
 
+import os
 import asyncio
 import mimetypes
-import os
 import smtplib
 import ssl
 from email.headerregistry import Address

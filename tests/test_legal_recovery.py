@@ -5,6 +5,7 @@ import httpx
 import pytest
 from langchain_core.messages import AIMessageChunk, HumanMessage
 from openai import APIStatusError
+from qdrant_client.http.exceptions import UnexpectedResponse
 
 from ai_agent_learning.langchain_agent.legal.graph import (
     _route_decision,
@@ -51,6 +52,32 @@ def test_missing_retrieval_keywords_returns_to_decide_with_feedback():
     assert _route_retrieval(retried) == "decide"
     assert retried["cases"]["case_1"]["invalid_retrieval_count"] == 1
     assert "读取不到有效的检索关键词" in nodes._decision_context(retried)
+
+
+@pytest.mark.parametrize("status_code", [404, 503])
+def test_qdrant_retrieval_error_reports_status_and_only_retries_transient_failures(status_code):
+    class FailingLawTool:
+        async def ainvoke(self, arguments):
+            raise UnexpectedResponse(status_code, "failed", b"private-server-details", httpx.Headers())
+
+    nodes = LegalNodes(model=None, law_tool=FailingLawTool())
+    state = _state()
+    state["cases"]["case_1"]["pending_retrieval_cases"] = [{
+        "issue": "加班费", "title_keywords": ["劳动法"],
+        "content_keywords": ["加班"], "case_facts": "周六工作八小时",
+    }]
+    updated = _apply(state, asyncio.run(nodes.retrieve_laws(state)))
+    case = updated["cases"]["case_1"]
+    assert f"Qdrant HTTP {status_code}" in case["last_node_error"]
+    assert "private-server-details" not in case["last_node_error"]
+    if status_code == 404:
+        assert _route_retrieval(updated) == "refuse"
+        assert "法律知识库 npc_laws 不存在" in case["refusal_reason"]
+        assert case["retry_target"] is None
+    else:
+        assert _route_retrieval(updated) == "retry"
+        final = _apply(updated, asyncio.run(nodes.retrieve_laws(updated)))
+        assert _route_retrieval(final) == "refuse"
 
 
 def test_decision_error_retries_in_subgraph_then_refuses():

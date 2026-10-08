@@ -1,10 +1,11 @@
 """负责将候选记忆和检索查询转换为向量。"""
 
-import math
 import os
+import math
 from collections.abc import Sequence
 
 from openai import AsyncOpenAI
+
 
 DEFAULT_EMBEDDING_MODEL = "embedding-3"
 DEFAULT_EMBEDDING_DIMENSIONS = 512

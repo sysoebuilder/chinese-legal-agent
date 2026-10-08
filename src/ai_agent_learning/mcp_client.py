@@ -3,26 +3,28 @@
 发现的工具转换为 LangChain StructuredTool，可直接交给 Agent。
 """
 
-from collections.abc import AsyncIterator, Mapping
-from contextlib import AsyncExitStack, asynccontextmanager
-from dataclasses import dataclass
 import json
 import os
 import re
+from collections.abc import AsyncIterator, Mapping
+from contextlib import AsyncExitStack, asynccontextmanager
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NotRequired, TypedDict
 from urllib.parse import urlsplit
-import httpx2
 
-from mcp import Client, StdioServerParameters
-from mcp.types import CallToolResult, Tool
-from mcp.client.streamable_http import streamable_http_client
+import httpx2
 from langchain_core.tools import StructuredTool, ToolException
+from mcp import Client, StdioServerParameters
+from mcp.client.streamable_http import streamable_http_client
+from mcp.types import CallToolResult, Tool
 
 
 class CloudServerConfig(TypedDict):
     url: str
     headers: NotRequired[dict[str, str]]
+    read_timeout_seconds: NotRequired[float]
+    trust_env: NotRequired[bool]
 
 
 def resolve_headers(headers: Mapping[str, str]) -> dict[str, str]:
@@ -69,6 +71,7 @@ async def connect_cloud_server(
     *,
     read_timeout_seconds: float = 60,
     headers: Mapping[str, str] | None = None,
+    trust_env: bool = True,
 ) -> AsyncIterator[Client]:
     """连接一个 HTTP MCP Server，退出上下文时关闭连接。"""
     if read_timeout_seconds <= 0:
@@ -76,13 +79,17 @@ async def connect_cloud_server(
     parsed = urlsplit(url)
     if parsed.scheme not in {"http", "https"} or not parsed.hostname:
         raise ValueError("MCP Server 的地址必须是完整 HTTP(S) URL")
-    if headers:
-        async with httpx2.AsyncClient(headers=dict(headers), timeout=read_timeout_seconds) as http_client:
-            async with Client(
+    if headers or not trust_env:
+        async with (
+            httpx2.AsyncClient(
+                headers=dict(headers or {}), timeout=read_timeout_seconds, trust_env=trust_env,
+            ) as http_client,
+            Client(
                 streamable_http_client(url, http_client=http_client),
                 read_timeout_seconds=read_timeout_seconds,
-            ) as client:
-                yield client
+            ) as client,
+        ):
+            yield client
     else:
         async with Client(url, read_timeout_seconds=read_timeout_seconds) as client:
             yield client
@@ -136,8 +143,10 @@ async def connect_servers(
                     else:
                         cloud_config = cloud_servers[name]
                         connection = connect_cloud_server(
-                            cloud_config["url"], read_timeout_seconds=read_timeout_seconds,
+                            cloud_config["url"],
+                            read_timeout_seconds=cloud_config.get("read_timeout_seconds", read_timeout_seconds),
                             headers=resolve_headers(cloud_config.get("headers", {})),
+                            trust_env=cloud_config.get("trust_env", True),
                         )
                     client = await server_stack.enter_async_context(connection)
                     server_tools = await list_all_tools(client)
@@ -152,7 +161,7 @@ async def connect_servers(
                     clients[name] = client
                     tools.extend(server_tools)
                     names.update(server_names)
-            except Exception as error:
+            except Exception as error:  # noqa: BLE001 -- 隔离单个 MCP 服务故障，其他连接继续可用。
                 errors[name] = f"{type(error).__name__}: {error}"
         yield MCPConnections(clients=clients, tools=tools, errors=errors)
 

@@ -17,7 +17,13 @@ from langgraph.checkpoint.base import (
 )
 from langgraph.checkpoint.postgres import PostgresSaver
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+
 from ai_agent_learning.database import validate_database_url
+
+
+def has_pending_turn(snapshot: Any) -> bool:
+    """CLI 和 API 共用的断点判定；恢复时不追加用户消息。"""
+    return bool(snapshot.next)
 
 
 class ThreadedPostgresSaver(PostgresSaver):
@@ -48,7 +54,11 @@ class ThreadedPostgresSaver(PostgresSaver):
         new_versions: ChannelVersions,
     ) -> RunnableConfig:
         return await asyncio.to_thread(
-            self.put, config, checkpoint, metadata, new_versions,
+            self.put,
+            config,
+            checkpoint,
+            metadata,
+            new_versions,
         )
 
     async def aput_writes(
@@ -64,10 +74,15 @@ class ThreadedPostgresSaver(PostgresSaver):
         await asyncio.to_thread(self.delete_thread, thread_id)
 
     async def aget_delta_channel_history(
-        self, *, config: RunnableConfig, channels: Sequence[str],
+        self,
+        *,
+        config: RunnableConfig,
+        channels: Sequence[str],
     ) -> Mapping[str, DeltaChannelHistory]:
         return await asyncio.to_thread(
-            self.get_delta_channel_history, config=config, channels=channels,
+            self.get_delta_channel_history,
+            config=config,
+            channels=channels,
         )
 
 

@@ -16,6 +16,8 @@ htmlcov/
 /laws/npc-law-vectors.zip.sha256
 /src/data/
 /projects/
+/.test-tmp*/
 /days/
 /raw/.datasets-cache/
 /raw/.npc-import-checkpoint.json
+node_modules/

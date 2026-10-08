@@ -1,0 +1,13 @@
+# 只发送构建所需文件，排除凭据、数据库、模型和 Windows 可执行文件。
+**
+!Dockerfile
+!pyproject.toml
+!README.md
+!src/
+!src/**
+**/__pycache__/
+**/*.pyc
+**/.env*
+**/*-model.env
+src/ai_agent_learning/runtime/
+src/ai_agent_learning/laws/

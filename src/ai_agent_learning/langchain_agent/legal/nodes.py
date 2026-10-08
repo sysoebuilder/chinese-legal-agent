@@ -9,6 +9,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.tools import BaseTool
 from langgraph.types import interrupt
 from openai import APIStatusError
+from qdrant_client.http.exceptions import UnexpectedResponse
 
 from ai_agent_learning.langchain_agent.legal.schemas import (
     LegalAnswerReviewOutput,
@@ -447,6 +448,11 @@ reason 说明通过检查的理由或具体缺口。不能把上游已选择最�
         retryable = not isinstance(error, APIStatusError) or (
             error.status_code in RETRYABLE_API_STATUS_CODES
         )
+        if isinstance(error, UnexpectedResponse):
+            error_detail += f"（Qdrant HTTP {error.status_code}）"
+            retryable = error.status_code in RETRYABLE_API_STATUS_CODES
+            if node_name == "retrieve_laws" and error.status_code == 404:
+                error_detail = "法律知识库 npc_laws 不存在（Qdrant HTTP 404），请恢复或导入法律数据"
         retry_count = (
             case.get("retry_count", 0) + 1
             if case.get("retry_target") == node_name

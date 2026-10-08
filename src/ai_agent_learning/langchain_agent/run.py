@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import os
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
 from typing import Any
@@ -13,12 +14,22 @@ from ai_agent_learning.database import get_database_url, migrate_database
 from ai_agent_learning.langchain_agent.chat import run_chat_loop
 from ai_agent_learning.langchain_agent.checkpoint import open_checkpointer
 from ai_agent_learning.langchain_agent.memory import MemoryWorker
-from ai_agent_learning.langchain_agent.middleware.memory import MemorySaveMiddleware, MemoryTurn
-from ai_agent_learning.langchain_agent.runtime import create_langchain_model, create_new_chat_agent
-from ai_agent_learning.langchain_agent.session import PostgresSessionStore, open_session_store, select_session
+from ai_agent_learning.langchain_agent.middleware.memory import (
+    MemorySaveMiddleware,
+    MemoryTurn,
+)
+from ai_agent_learning.langchain_agent.runtime import (
+    create_langchain_model,
+    create_new_chat_agent,
+)
+from ai_agent_learning.langchain_agent.session import (
+    PostgresSessionStore,
+    open_session_store,
+    select_session,
+)
 from ai_agent_learning.logging_config import configure_logging, shutdown_logging
-from ai_agent_learning.model_config import ModelConfig, load_active_model
 from ai_agent_learning.mcp_client import CloudServerConfig, connect_servers
+from ai_agent_learning.model_config import ModelConfig, load_active_model
 from ai_agent_learning.qdrant_server import QdrantServer
 from ai_agent_learning.ui.terminal import TerminalUI
 
@@ -37,6 +48,20 @@ CLOUD_MCP_SERVERS: dict[str, CloudServerConfig] = {
         "url": "https://docs.mcp.cloudflare.com/mcp",
     },
 }
+
+
+def configured_cloud_servers() -> dict[str, CloudServerConfig]:
+    """按运行时环境加入 Windows 宿主机的 HTTP MCP，不修改公共配置。"""
+    servers = dict(CLOUD_MCP_SERVERS)
+    url = os.getenv("WINDOWS_MCP_URL", "").strip()
+    if url:
+        servers["windows_terminal"] = {
+            "url": url,
+            "headers": {"Authorization": "Bearer ${WINDOWS_MCP_TOKEN}"},
+            "read_timeout_seconds": 330,
+            "trust_env": False,
+        }
+    return servers
 
 
 @dataclass
@@ -67,9 +92,15 @@ async def open_chat_agent():
             checkpointer = await stack.enter_async_context(open_checkpointer(database_url))
             ui = TerminalUI()
             mcp_tools: list[StructuredTool] = []
-            if LOCAL_MCP_SERVERS or CLOUD_MCP_SERVERS:
+            cloud_servers = configured_cloud_servers()
+            local_servers = dict(LOCAL_MCP_SERVERS)
+            if os.name == "nt":
+                # Windows 已注册内置 run_command，避免再连接同一终端的 MCP。
+                cloud_servers.pop("windows_terminal", None)
+                local_servers.pop("windows_terminal", None)
+            if local_servers or cloud_servers:
                 connections = await stack.enter_async_context(connect_servers(
-                    local_servers=LOCAL_MCP_SERVERS, cloud_servers=CLOUD_MCP_SERVERS,
+                    local_servers=local_servers, cloud_servers=cloud_servers,
                 ))
                 mcp_tools = connections.tools
                 for name, error in connections.errors.items():
