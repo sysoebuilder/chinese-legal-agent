@@ -28,7 +28,7 @@ API 与 worker 共用 `Dockerfile` 构建的镜像，基础服务健康后才启
 前端镜像通过 Node.js 构建，再由 Nginx 提供资源，运行容器不启动 Vite 开发服务器。
 模型配置仍在终端进行，不会打包到前端；开发与验证说明见 `frontend/README.md`。
 
-主机 `data/` 挂载为 `/app/config`，通过 `LLM_CLI_CONFIG_DIR` 读取 `.env` 和 `active-model.env`，继续复用模型与工具凭据；配置保存仍支持原子替换。`LLM_CLI_DATA_DIR=/app/data` 独立指向 Docker 应用数据卷，数据库与索引不会写入主机配置目录。
+主机 `data/` 挂载为 `/app/config`，通过 `LLM_CLI_CONFIG_DIR` 读取 `models.json`、`mouldes.json` 和 `secrets.json`，构造 `APPConfig`；首次启动兼容迁移原来的 `.env` 和 `active-model.env`。配置查询及修改接口见 [应用配置](model-configuration.md)，保存使用文件锁和原子替换。`LLM_CLI_DATA_DIR=/app/data` 独立指向 Docker 应用数据卷，数据库与索引不会写入主机配置目录。
 Compose 覆盖数据库、Redis 和 Qdrant 地址，连接 `postgres`、`redis` 和 `http://qdrant:6333`，无需修改本机配置文件。
 PostgreSQL、Redis 和 Qdrant 映射到本机 `127.0.0.1:5432`、`127.0.0.1:6379`、`127.0.0.1:6333`。本机 `data/.env` 使用以下连接配置（也见 `.env.example`）：
 
@@ -144,7 +144,7 @@ Windows 专用的 `run_command` 工具不向容器内 Agent 注册。
 .\.venv\Scripts\python.exe -m pip install -e .
 ```
 
-`data/.env` 中继续配置 `CHECKPOINT_DATABASE_URL`、模型和工具所需凭据，并增加：
+`data/.env` 中继续配置 `CHECKPOINT_DATABASE_URL` 等部署参数，模型和工具凭据放入 `data/secrets.json`。API 部署参数还可增加：
 
 ```dotenv
 AGENT_REDIS_URL=redis://127.0.0.1:6379/0

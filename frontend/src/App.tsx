@@ -1,12 +1,22 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { reveal } from "./motion";
-import { IconLayoutSidebar, IconMoon, IconSun, IconPlus } from "./icons";
+import {
+  IconLayoutSidebar,
+  IconMoon,
+  IconSun,
+  IconPlus,
+  IconSettings,
+  IconX,
+  IconCheck,
+} from "./icons";
 import { Composer } from "./components/Composer";
 import { Sidebar } from "./components/Sidebar";
 import { Message, LiveContent, Reasoning } from "./components/Message";
 import { InterruptForm } from "./components/InterruptForm";
-import { SettingsDialog } from "./components/SettingsDialog";
+import { SettingsDialog, type SettingsTab } from "./components/SettingsDialog";
+import { ModelSwitcher } from "./components/ModelSwitcher";
+import { useAppConfig } from "./useAppConfig";
 import { DeleteDialog } from "./components/DeleteDialog";
 import { statusText, useChat } from "./useChat";
 import type { Session } from "./types";
@@ -23,8 +33,10 @@ function Skeletons() {
 
 export function App() {
   const chat = useChat();
+  const configuration = useAppConfig();
   const [draft, setDraft] = useState("");
   const [settings, setSettings] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>("models");
   const [deleteTarget, setDeleteTarget] = useState<Session | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteError, setDeleteError] = useState("");
@@ -87,6 +99,7 @@ export function App() {
   }, []);
   useEffect(() => {
     if (chat.needsAuth) {
+      setSettingsTab("connection");
       setSettings(true);
       chat.dismissAuth();
     }
@@ -173,6 +186,11 @@ export function App() {
     localStorage.setItem("agent100.theme", next);
     setTheme(next);
   }
+  function openSettings(tab: SettingsTab = "models") {
+    setSettingsTab(tab);
+    setSettings(true);
+    setSidebarOpen(false);
+  }
 
   return (
     <div
@@ -209,7 +227,7 @@ export function App() {
         onNew={newChat}
         onRefresh={() => void chat.loadSessions()}
         onMore={() => void chat.loadSessions(true)}
-        onSettings={() => setSettings(true)}
+        onSettings={() => openSettings()}
         onClose={() => setSidebarOpen(false)}
       />
       <main className={`main${empty ? " is-empty" : ""}`}>
@@ -243,11 +261,18 @@ export function App() {
             </div>
           </div>
           <div className="header-actions">
-            {chat.run?.model && (
-              <span id="model-name" className="model-name">
-                {chat.run.model}
-              </span>
-            )}
+            <ModelSwitcher
+              settings={configuration}
+              onConfigure={() => openSettings()}
+            />
+            <button
+              className="icon-button"
+              aria-label="打开设置"
+              title="模型与插件设置"
+              onClick={() => openSettings()}
+            >
+              <IconSettings />
+            </button>
             <button
               className="icon-button header-new"
               aria-label="开启新对话"
@@ -279,6 +304,32 @@ export function App() {
             </button>
           </div>
         </header>
+        <AnimatePresence>
+          {!settings &&
+            (configuration.notice ||
+              (configuration.config && configuration.error)) && (
+              <motion.div
+                className="config-toast"
+                role={configuration.error ? "alert" : "status"}
+                initial={reduced ? false : { opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={reduced ? { duration: 0 } : reveal}
+              >
+                {!configuration.error && <IconCheck />}
+                <span>{configuration.error || configuration.notice}</span>
+                {configuration.error && (
+                  <button
+                    className="icon-button"
+                    aria-label="关闭配置提示"
+                    onClick={configuration.dismissError}
+                  >
+                    <IconX />
+                  </button>
+                )}
+              </motion.div>
+            )}
+        </AnimatePresence>
         <div
           id="scroll-area"
           ref={scrollArea}
@@ -417,7 +468,12 @@ export function App() {
         open={settings}
         busy={busy}
         onOpenChange={setSettings}
-        onSave={chat.reconnect}
+        initialTab={settingsTab}
+        settings={configuration}
+        onSave={async (token) => {
+          await chat.reconnect(token);
+          return configuration.reload();
+        }}
       />
       <DeleteDialog
         open={deleteOpen}

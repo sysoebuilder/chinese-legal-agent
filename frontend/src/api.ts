@@ -1,4 +1,12 @@
-import type { StreamEvent } from "./types";
+import type {
+  AppConfig,
+  ModelsConfig,
+  ModelsPatch,
+  MouldesConfig,
+  MouldesPatch,
+  SecretsConfig,
+  StreamEvent,
+} from "./types";
 
 export class ApiError extends Error {
   status: number;
@@ -40,6 +48,26 @@ export async function json<T>(
       : { method: "POST", body: JSON.stringify(body), signal };
   return (await request(path, options)).json();
 }
+
+export function getAppConfig(signal?: AbortSignal): Promise<AppConfig> {
+  return json<AppConfig>("/v1/config", undefined, signal);
+}
+
+async function patch<T>(section: string, body: unknown): Promise<T> {
+  return (
+    await request(`/v1/config/${section}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    })
+  ).json();
+}
+
+export const patchModels = (body: ModelsPatch) =>
+  patch<ModelsConfig>("models", body);
+export const patchMouldes = (body: MouldesPatch) =>
+  patch<MouldesConfig>("mouldes", body);
+export const patchSecrets = (keys: Record<string, string | null>) =>
+  patch<SecretsConfig>("secrets", { keys });
 
 // 网络分块不是事件边界，等待完整 SSE 帧后才解析。
 export function createEventParser(onEvent: (event: StreamEvent) => void) {

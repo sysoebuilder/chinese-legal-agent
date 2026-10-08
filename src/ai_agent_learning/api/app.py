@@ -12,6 +12,7 @@ import psycopg
 from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 
+from ai_agent_learning.api.config import router as config_router
 from ai_agent_learning.api.events import RedisEventBus, as_sse
 from ai_agent_learning.api.schemas import (
     TERMINAL_STATUSES,
@@ -29,8 +30,9 @@ from ai_agent_learning.api.store import (
     RunNotFound,
     RunStore,
 )
+from ai_agent_learning.config import ConfigStore
 from ai_agent_learning.database import get_database_url, migrate_database
-from ai_agent_learning.model_config import ModelConfig, load_active_model
+from ai_agent_learning.model_config import ModelConfig
 
 logger = logging.getLogger(__name__)
 
@@ -126,6 +128,7 @@ async def dispatch_loop(
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     from ai_agent_learning.api.celery_app import CeleryPublisher
 
+    app.state.app_config = await asyncio.to_thread(app.state.config_store.load)
     event_bus = app.state.event_bus
     if app.state.configured_store is None:
         database_url = get_database_url()
@@ -221,15 +224,24 @@ async def history(
 
 @router.post("/v1/runs", response_model=RunView, status_code=202)
 async def create_run(body: CreateRun, request: Request) -> RunView:
+    key_ref = None
     try:
-        config = request.app.state.model_loader()
-    except (SystemExit, ValueError):
+        if request.app.state.model_loader is not None:
+            config = request.app.state.model_loader()
+        else:
+            app_config = await asyncio.to_thread(request.app.state.config_store.load)
+            request.app.state.app_config = app_config
+            config = app_config.active_model()
+            key_ref = app_config.modelconfig.models[app_config.modelconfig.active].api_key_ref
+    except (SystemExit, ValueError, OSError):
         raise HTTPException(503, "请先在终端运行 agent100 config 配置模型") from None
     public_config = {
         "provider": config.provider,
         "model": config.model,
         "base_url": config.base_url,
     }
+    if key_ref is not None:
+        public_config["api_key_ref"] = key_ref
     row = await asyncio.to_thread(
         request.app.state.store.create,
         body.message,
@@ -301,7 +313,8 @@ def create_app(
     publisher: RunPublisher | None = None,
     settings: ApiSettings | None = None,
     event_bus=None,
-    model_loader: Callable[[], ModelConfig] = load_active_model,
+    model_loader: Callable[[], ModelConfig] | None = None,
+    config_store: ConfigStore | None = None,
 ) -> FastAPI:
     api_settings = settings or ApiSettings.from_env()
     app = FastAPI(title="agent100 Run API", version="v1", lifespan=lifespan)
@@ -313,10 +326,12 @@ def create_app(
         store.event_bus = app.state.event_bus
     app.state.publisher = publisher
     app.state.model_loader = model_loader
+    app.state.config_store = config_store or ConfigStore()
     app.add_exception_handler(RunNotFound, missing)
     app.add_exception_handler(RunConflict, conflict)
     app.add_exception_handler(psycopg.Error, unavailable)
     app.include_router(router)
+    app.include_router(config_router, dependencies=[Depends(authorized)])
     return app
 
 

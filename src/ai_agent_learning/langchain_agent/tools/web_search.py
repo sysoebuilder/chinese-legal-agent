@@ -1,12 +1,12 @@
 """web_search 工具实现与 LangChain 注册。"""
 
-import os
 from typing import Any, Literal
 
 import httpx
 from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, ConfigDict, Field
 
+from ai_agent_learning.config.context import get_secret
 from ai_agent_learning.langchain_agent.tools.risk import RiskLevel
 
 TOOL_DESCRIPTION = (
@@ -39,7 +39,7 @@ class SearchResponse(BaseModel):
 
 async def handler(query: str, count: int = 5) -> dict[str, Any]:
     """每次调用独立管理 HTTP 连接，重试由 Agent 中间件管理。"""
-    api_key = os.getenv("ZAI_API_KEY", "").strip()
+    api_key = get_secret("ZAI_API_KEY")
     if not api_key:
         raise ValueError("缺少 ZAI_API_KEY 配置")
 

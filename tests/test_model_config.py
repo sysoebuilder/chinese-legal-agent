@@ -1,6 +1,5 @@
+import json
 from pathlib import Path
-
-from dotenv import dotenv_values
 
 from ai_agent_learning.model_config import (
     create_model_config,
@@ -8,22 +7,18 @@ from ai_agent_learning.model_config import (
 )
 
 
-def test_first_config_uses_builtin_url_and_creates_source_file(
+def test_first_config_separates_model_and_credentials(
     monkeypatch, tmp_path: Path,
 ) -> None:
-    monkeypatch.setattr(
-        "ai_agent_learning.model_config.get_data_dir", lambda: tmp_path,
-    )
+    monkeypatch.setenv("LLM_CLI_CONFIG_DIR", str(tmp_path))
 
     config = create_model_config("glm", "secret-key", "")
     path = save_source_model(config)
-    values = dotenv_values(path)
+    values = json.loads(path.read_text(encoding="utf-8"))
 
     assert config.model == "GLM-5.3-flash"
     assert config.base_url == "https://open.bigmodel.cn/api/paas/v4/"
-    assert values == {
-        "ZAI_API_KEY": "secret-key",
-        "GLM_MODEL": "GLM-5.3-flash",
-        "GLM_BASE_URL": "https://open.bigmodel.cn/api/paas/v4/",
-        "QDRANT_URL": "http://127.0.0.1:6333",
-    }
+    assert values["models"]["glm"]["model"] == config.model
+    assert values["models"]["glm"]["api_key_ref"] == "ZAI_API_KEY"
+    assert "secret-key" not in path.read_text(encoding="utf-8")
+    assert json.loads((tmp_path / "secrets.json").read_text())["keys"]["ZAI_API_KEY"] == "secret-key"

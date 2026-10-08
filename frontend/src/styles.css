@@ -867,6 +867,528 @@ kbd {
   background: #00000038;
   backdrop-filter: blur(5px);
 }
+
+/* 设置沿用聊天界面的中性色与留白，滚动仅发生在内容区。 */
+.app-settings {
+  width: 760px;
+  max-height: calc(100dvh - 48px);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.app-settings .dialog-heading {
+  padding: 26px 30px 18px;
+  margin: 0;
+  align-items: flex-start;
+}
+.app-settings .dialog-heading p {
+  margin: 7px 0 0;
+}
+.settings-tabs {
+  display: flex;
+  gap: 5px;
+  padding: 4px;
+  margin: 0 30px;
+  background: var(--side);
+  border-radius: 11px;
+  flex-shrink: 0;
+}
+.settings-tabs > button {
+  flex: 1;
+  position: relative;
+  padding: 10px 18px;
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.settings-tabs > button[aria-selected="true"] {
+  color: var(--text);
+}
+.settings-tab-indicator {
+  position: absolute;
+  inset: 0;
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 1px 4px #00000008;
+}
+:root[data-theme="dark"] .settings-tabs,
+:root[data-theme="dark"] .legal-setting {
+  background: var(--page);
+}
+:root[data-theme="dark"] .settings-tab-indicator {
+  background: var(--soft);
+}
+.settings-tab-label {
+  display: flex;
+  position: relative;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+}
+.settings-tab-label .tabler-icon {
+  width: 16px;
+  height: 16px;
+}
+.settings-scroll {
+  padding: 28px 30px 24px;
+  min-height: 0;
+  max-height: min(570px, calc(100dvh - 240px));
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+  overscroll-behavior: contain;
+}
+.settings-scroll > section {
+  min-height: 350px;
+}
+.settings-footer {
+  flex-shrink: 0;
+  padding: 16px 30px;
+  border-top: 1px solid var(--line);
+}
+.settings-feedback {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.settings-feedback.is-error {
+  color: var(--text);
+  padding-left: 10px;
+  border-left: 2px solid var(--blue);
+}
+.settings-feedback .tabler-icon {
+  width: 14px;
+  height: 14px;
+  color: var(--blue);
+}
+.model-settings-layout {
+  display: grid;
+  grid-template-columns: 184px minmax(0, 1fr);
+  gap: 28px;
+}
+.model-config-list {
+  min-width: 0;
+  padding-right: 18px;
+  border-right: 1px solid var(--line);
+}
+.setting-section-label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 11px;
+  margin: 0 0 14px;
+}
+.setting-section-label > span {
+  font-size: 10px;
+  opacity: 0.7;
+}
+.model-config-item {
+  display: block;
+  width: 100%;
+  padding: 12px;
+  border-radius: 10px;
+  text-align: left;
+  margin-bottom: 5px;
+}
+.model-config-item:hover:not(:disabled),
+.add-model:hover:not(:disabled) {
+  background: var(--side);
+}
+.model-config-item.selected,
+.add-model.selected {
+  background: var(--blue-soft);
+  color: var(--blue);
+}
+.model-config-item-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 550;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.7;
+}
+.model-config-item-title .tabler-icon {
+  width: 13px;
+  height: 13px;
+  color: var(--blue);
+}
+.model-config-item-meta {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 5px;
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.add-model {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 12px;
+  border-radius: 9px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.add-model .tabler-icon {
+  width: 14px;
+  height: 14px;
+}
+.settings-section-heading h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 550;
+}
+.settings-section-heading p {
+  margin: 5px 0 22px;
+  font-size: 11px;
+}
+.app-settings fieldset {
+  min-width: 0;
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+.settings-field {
+  margin-bottom: 17px;
+  min-width: 0;
+}
+.app-settings .settings-field label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 500;
+}
+.app-settings input,
+.app-settings select {
+  padding: 10px 12px;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--text);
+  background: var(--page);
+  font-size: 12px;
+  min-width: 0;
+}
+.app-settings .field-hint,
+.app-settings .field-error {
+  margin: 7px 0 0;
+  font-size: 10px;
+  line-height: 1.8;
+}
+.app-settings .field-error {
+  color: var(--text);
+  border-left: 2px solid var(--blue);
+  padding-left: 9px;
+}
+.field-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 400;
+}
+.field-state .tabler-icon {
+  width: 12px;
+  height: 12px;
+}
+.model-advanced {
+  margin: 17px 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+.model-advanced summary {
+  cursor: pointer;
+  width: fit-content;
+}
+.model-advanced .settings-field {
+  margin-top: 16px;
+  color: var(--text);
+}
+.app-settings .settings-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 18px 0;
+  font-size: 11px;
+  font-weight: 400;
+  cursor: pointer;
+}
+.app-settings .settings-checkbox input {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--blue);
+}
+.settings-form-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 24px;
+}
+.settings-form-actions > span {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.8;
+}
+.legal-setting {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 20px;
+  border-radius: 12px;
+  background: var(--side);
+  margin-bottom: 28px;
+}
+.legal-icon {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.setting-row-copy {
+  flex: 1;
+  min-width: 0;
+}
+.setting-row-copy h3 {
+  font-size: 12px;
+  font-weight: 500;
+  margin: 0;
+}
+.setting-row-copy p {
+  font-size: 11px;
+  margin: 5px 0 0;
+}
+.setting-toggle {
+  width: 38px;
+  height: 22px;
+  padding: 3px;
+  background: var(--line);
+  border-radius: 20px;
+  flex-shrink: 0;
+}
+.setting-toggle[aria-checked="true"] {
+  background: var(--blue);
+}
+.setting-toggle > span {
+  display: block;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px #00000016;
+}
+.plugin-group + .plugin-group {
+  margin-top: 28px;
+}
+.setting-row {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  padding: 15px 0;
+  border-bottom: 1px solid var(--line);
+}
+.setting-row:last-child {
+  border-bottom: 0;
+}
+.plugin-save {
+  position: sticky;
+  bottom: -24px;
+  padding: 18px 0 4px;
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+}
+.connection-settings {
+  max-width: 440px;
+  margin: 10px auto 35px;
+}
+.connection-settings .settings-section-heading {
+  margin-bottom: 30px;
+}
+.settings-empty {
+  padding: 60px 15px;
+  text-align: center;
+}
+.settings-empty h3 {
+  font-size: 14px;
+  font-weight: 500;
+}
+.settings-loading .skeleton {
+  height: 40px;
+  margin: 18px 0;
+}
+.model-switcher {
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+  max-width: 210px;
+}
+.model-switcher select {
+  width: 100%;
+  max-width: 210px;
+  appearance: none;
+  padding: 8px 26px 8px 10px;
+  font-size: 11px;
+  color: var(--muted);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  text-overflow: ellipsis;
+}
+.model-switcher select:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--side);
+}
+.model-switcher select:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.model-switcher > .tabler-icon {
+  width: 12px;
+  height: 12px;
+  position: absolute;
+  right: 8px;
+  pointer-events: none;
+  color: var(--muted);
+}
+.model-settings-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  font-size: 11px;
+  color: var(--muted);
+  border-radius: 8px;
+}
+.model-settings-button .tabler-icon {
+  width: 14px;
+  height: 14px;
+}
+.config-toast {
+  position: absolute;
+  z-index: 3;
+  top: 70px;
+  right: 28px;
+  max-width: min(400px, calc(100% - 32px));
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  font-size: 11px;
+  line-height: 1.8;
+}
+.config-toast > .tabler-icon {
+  width: 14px;
+  height: 14px;
+  color: var(--blue);
+}
+.config-toast .icon-button {
+  width: 24px;
+  height: 24px;
+}
+@media (max-width: 600px) {
+  .app-settings {
+    max-width: calc(100% - 20px);
+    max-height: calc(100dvh - 24px);
+    border-radius: 17px;
+  }
+  .settings-dialog.app-settings {
+    padding: 0;
+  }
+  .app-settings .dialog-heading {
+    padding: 22px 20px 16px;
+  }
+  .settings-tabs {
+    margin: 0 20px;
+  }
+  .settings-scroll {
+    padding: 22px 20px;
+    max-height: calc(100dvh - 210px);
+  }
+  .settings-footer {
+    padding: 14px 20px;
+  }
+  .model-settings-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+  }
+  .model-config-list {
+    display: flex;
+    gap: 7px;
+    overflow-x: auto;
+    border: 0;
+    padding: 0 0 10px;
+    scrollbar-width: thin;
+  }
+  .model-config-list > .setting-section-label {
+    display: none;
+  }
+  .model-config-item,
+  .add-model {
+    flex-shrink: 0;
+    width: 150px;
+    margin: 0;
+    background: var(--side);
+  }
+  .add-model {
+    width: auto;
+  }
+  .legal-setting {
+    padding: 16px;
+    gap: 10px;
+  }
+  .legal-icon {
+    display: none;
+  }
+  .model-switcher,
+  .model-switcher select {
+    max-width: min(130px, 29vw);
+  }
+  .model-settings-button {
+    font-size: 10px;
+  }
+  .config-toast {
+    right: 16px;
+  }
+  .plugin-save {
+    bottom: -22px;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .model-config-item,
+  .add-model,
+  .setting-toggle,
+  .model-switcher select {
+    transition:
+      background-color 0.2s var(--ease),
+      color 0.2s var(--ease);
+  }
+}
 .dialog-heading {
   display: flex;
   justify-content: space-between;

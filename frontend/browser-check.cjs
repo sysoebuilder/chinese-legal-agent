@@ -38,6 +38,7 @@ function answerFrames() {
       const send = (body,status=200) => route.fulfill({ status,contentType:'application/json',body:JSON.stringify(body) });
       if (requireToken && request.headers().authorization !== 'Bearer browser-test-token') return send({ detail:'需要有效的 Bearer token' },401);
       if (requireToken) authObserved = true;
+      if (pathname === '/v1/config') return send({ modelconfig:{ active:'glm',models:{ glm:{ provider:'glm',model:'测试模型',base_url:'https://model.example',api_key_ref:'ZAI_API_KEY' } } },mouldesconfig:{ legal:{ able:true },plugins:{} },secretsconfig:{ keys:{ ZAI_API_KEY:true } } });
       if (pathname === '/v1/sessions') return send({ sessions,has_more:false,next_offset:null });
       if (pathname.endsWith('/recovery')) {
         recoveryCalls++;
@@ -103,13 +104,13 @@ function answerFrames() {
     await page.getByRole('button',{ name:'加载更早的对话' }).click();
     await page.waitForFunction(() => document.querySelectorAll('#messages .message').length===22);
     assert.equal(await page.evaluate(() => window.injected),undefined);
-    await page.getByRole('button',{ name:/新对话/ }).click();
+    await page.locator('#new-chat').click();
     await page.getByRole('textbox',{ name:'发送消息',exact:true }).fill('帮我梳理一下 SSE 的工作方式');
     await page.getByRole('button',{ name:'发送消息',exact:true }).click();
     await page.waitForFunction(() => document.querySelector('#messages .assistant')?.textContent.includes('最终回答'));
     assert.equal(await page.locator('#messages .message').count(),2);
     assert.ok(!(await page.locator('#messages').innerText()).includes('先执行查询'));
-    await page.locator('#messages .reasoning summary').click();
+    await page.locator('#messages .reasoning-toggle').click();
     assert.ok((await page.locator('#messages .reasoning-content').innerText()).includes('先梳理问题'));
     const assistantBox = await page.locator('#messages .assistant .message-main').boundingBox();
     const userBox = await page.locator('#messages .user .message-main').boundingBox(); assert.ok(userBox.x>assistantBox.x);
@@ -137,17 +138,18 @@ function answerFrames() {
     mode='approval'; await page.getByRole('textbox',{ name:'发送消息',exact:true }).fill('停止测试'); await page.getByRole('button',{ name:'发送消息',exact:true }).click();
     await page.locator('.interrupt-form select').waitFor(); await page.getByRole('button',{ name:'停止生成',exact:true }).click();
     await page.waitForFunction(() => document.getElementById('run-status').textContent.includes('已停止')); assert.ok(cancelled);
-    await page.getByRole('button',{ name:/新对话/ }).click();
+    await page.locator('#new-chat').click();
     mode='reconnect'; await page.getByRole('textbox',{ name:'发送消息',exact:true }).fill('测试事件流重新连接'); await page.getByRole('button',{ name:'发送消息',exact:true }).click();
     await page.waitForFunction(() => document.querySelector('#messages .assistant')?.textContent.includes('最终回答'));
     assert.equal(reconnectCursor,null);
+    await page.locator('#messages .reasoning-toggle').click();
     assert.equal(await page.locator('#messages .reasoning-content').textContent(),'先梳理问题，再一步步说明。');
-    await page.getByRole('button',{ name:/新对话/ }).click();
+    await page.locator('#new-chat').click();
     mode='failure'; await page.getByRole('textbox',{ name:'发送消息',exact:true }).fill('测试失败恢复'); await page.getByRole('button',{ name:'发送消息',exact:true }).click();
     await page.getByRole('button',{ name:'重试本轮' }).click();
     await page.waitForFunction(() => document.querySelector('#messages .assistant')?.textContent.includes('已收到补充信息'));
     assert.equal(await page.locator('#messages .user').count(),1);
-    await page.getByRole('button',{ name:/新对话/ }).click();
+    await page.locator('#new-chat').click();
     mode='worker_loss'; workerBusy=true; checkpointAvailable=true;
     await page.getByRole('textbox',{ name:'发送消息',exact:true }).fill('测试 Worker 退出后断点重连');
     await page.getByRole('button',{ name:'发送消息',exact:true }).click();
@@ -172,14 +174,15 @@ function answerFrames() {
     await page.getByRole('button',{ name:'从断点重连' }).click();
     await page.waitForFunction(() => document.querySelector('#messages .assistant')?.textContent.includes('已收到补充信息'));
     assert.equal(checkpointClicks,1); assert.equal(await page.locator('#messages .user').count(),1);
-    await page.getByRole('button',{ name:/新对话/ }).click();
+    await page.locator('#new-chat').click();
     await page.getByRole('textbox',{ name:'发送消息',exact:true }).fill('模拟连接错误'); await page.getByRole('button',{ name:'发送消息',exact:true }).click();
     await page.getByText('服务暂时不可用',{ exact:true }).waitFor(); assert.equal(await page.getByRole('textbox',{ name:'发送消息',exact:true }).inputValue(),'模拟连接错误');
 
     await page.setViewportSize({ width:390,height:844 });
     await page.getByRole('button',{ name:'切换历史对话栏' }).click();
     assert.ok(await page.locator('#sidebar').isVisible()); await page.getByRole('button',{ name:'关闭侧栏',exact:true }).click();
-    assert.ok(!(await page.locator('#sidebar').isVisible()));
+    await page.waitForFunction(() => document.getElementById('sidebar').getBoundingClientRect().right <= 0);
+    assert.equal(await page.locator('#sidebar').getAttribute('aria-hidden'),'true');
     await page.getByRole('button',{ name:'关闭提示' }).click(); await page.getByRole('textbox',{ name:'发送消息',exact:true }).fill('');
     await page.waitForTimeout(300);
     await page.screenshot({ path:path.join(output,'mobile-empty.png') });

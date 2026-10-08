@@ -1,11 +1,11 @@
 """负责将候选记忆和检索查询转换为向量。"""
 
-import os
 import math
 from collections.abc import Sequence
 
 from openai import AsyncOpenAI
 
+from ai_agent_learning.config.context import get_secret
 
 DEFAULT_EMBEDDING_MODEL = "embedding-3"
 DEFAULT_EMBEDDING_DIMENSIONS = 512
@@ -21,7 +21,7 @@ class GlmEmbeddingClient:
         model: str = DEFAULT_EMBEDDING_MODEL,
         dimensions: int = DEFAULT_EMBEDDING_DIMENSIONS,
     ) -> None:
-        api_key = os.getenv("ZAI_API_KEY", "").strip()
+        api_key = get_secret("ZAI_API_KEY")
         if not api_key:
             raise ValueError("缺少 ZAI_API_KEY 配置")
         if not model.strip():

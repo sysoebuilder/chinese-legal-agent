@@ -4,10 +4,11 @@ import asyncio
 
 from mcp import Client
 
+from ai_agent_learning.config import ConfigStore, get_secret
 from ai_agent_learning.mcp_server import server as server_module
 
 
-def test_search_laws_mcp_registration_and_call(monkeypatch) -> None:
+def test_search_laws_mcp_registration_and_call(monkeypatch, tmp_path) -> None:
     lifecycle = []
 
     class FakeQdrantServer:
@@ -18,7 +19,11 @@ def test_search_laws_mcp_registration_and_call(monkeypatch) -> None:
             lifecycle.append("close")
 
     monkeypatch.setattr(server_module, "QdrantServer", FakeQdrantServer)
+    config_store = ConfigStore(tmp_path)
+    config_store.update("secrets", {"keys": {"ZAI_API_KEY": "mcp-file-key"}})
+    monkeypatch.setattr(server_module, "load_app_config", config_store.load)
     async def fake_search_laws(cases):
+        assert get_secret("ZAI_API_KEY") == "mcp-file-key"
         return {"results": [{"issue": cases[0].issue, "laws": []}]}
 
     monkeypatch.setattr(server_module, "retrieve_laws", fake_search_laws)

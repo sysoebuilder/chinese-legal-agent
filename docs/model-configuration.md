@@ -1,48 +1,116 @@
-# 模型配置
+# 应用配置
 
-只有两个固定客户端：`glm` 对应 `GlmModelClient`，`deepseek` 对应 `DeepSeekClient`。模型名称由用户提供，不校验名称或调用 API 验证可用性。
+终端聊天与 API 启动时读取三个 JSON 文件并创建 `APPConfig`：
 
-## 1. 首次配置
+| 文件 | APPConfig 字段 | 用途 |
+| --- | --- | --- |
+| `models.json` | `modelconfig` | 当前模型、可选模型、地址与 Key 引用 |
+| `mouldes.json` | `mouldesconfig` | 内置工具、MCP 插件和法律子图开关 |
+| `secrets.json` | `secretsconfig` | 模型和插件所用的 Key |
 
-首次运行：
+默认目录为项目的 `data/`，可通过 `LLM_CLI_DATA_DIR` 修改默认数据目录，或用 `LLM_CLI_CONFIG_DIR` 单独指定配置目录。Compose 将主机 `data/` 挂载为 `/app/config`，API 和 Worker 共用配置文件。
 
-```powershell
-agent100 config
+首次加载创建缺少的文件。三个文件都不存在时，自动迁移同目录的 `.env` 和 `active-model.env`，保留旧文件；此后模型设置以 JSON 为准。数据库、Redis、Qdrant 等部署参数仍从环境变量或 `.env` 读取。无效 JSON 会报错，不会被默认值覆盖。
+
+## 模型与凭据
+
+运行 `agent100 config` 可选择 GLM 或 DeepSeek、隐藏输入 Key 并填写模型名称。保存时模型写入 `models.json`，Key 写入 `secrets.json`，不再生成包含 Key 的模型快照。默认模型分别为 `GLM-5.3-flash` 和 `deepseek-flash`；模型名称不做远程可用性验证。
+
+`models.json` 示例：
+
+```json
+{
+  "active": "deepseek",
+  "models": {
+    "deepseek": {
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "base_url": "https://api.deepseek.com",
+      "api_key_ref": "DEEPSEEK_API_KEY"
+    }
+  }
+}
 ```
 
-如果 `data/.env` 不存在，程序会进入首次配置：手动选择 GLM 或 DeepSeek，隐藏输入 API Key，然后输入模型名称。模型名称留空时分别使用 `GLM-5.3-flash` 或 `deepseek-flash`；Base URL 使用程序内置的官方地址，不要求用户填写。完成后自动创建 `data/.env` 和 `data/active-model.env`。
+`active` 对应 `models` 的键，支持配置多个模型。`provider` 支持 `glm` 和 `deepseek`。`api_key_ref` 是 secrets 的键名，不是 Key 本身。
 
-## 2. 选择当前模型
+`secrets.json` 使用 `{"keys":{"DEEPSEEK_API_KEY":"your-key"}}` 的结构。也可保存 `ZAI_API_KEY`、`GITHUB_PERSONAL_ACCESS_TOKEN`、`QQ_SMTP_USERNAME` 和 `QQ_SMTP_AUTH_CODE` 等工具凭据。文件中的值优先，未设置的键兼容从环境变量读取；空字符串明确禁用凭据，不会回退。Web Search 和记忆向量化仍需要 `ZAI_API_KEY`。
 
-```powershell
-agent100 config
+`secrets.json` 保存明文凭据，默认 `data/` 已被 Git 忽略。
+
+## 插件和法律子图
+
+`mouldes.json` 的 `plugins` 按工具名或 MCP 服务名配置 `able`。内置插件使用 `kind: "builtin"`，HTTP 和 stdio MCP 分别使用 `http` 和 `stdio`。默认保留原有内置工具、GitHub 和 Cloudflare Docs。Windows MCP 的初始地址和开关根据首次加载时的 `WINDOWS_MCP_URL` 设置，之后通过 JSON 或 API 修改。
+
+以下局部配置可发送给修改接口：
+
+```json
+{
+  "legal": {"able": false},
+  "plugins": {
+    "web_search": {"able": false},
+    "github": {
+      "kind": "http",
+      "able": true,
+      "url": "https://api.githubcopilot.com/mcp/",
+      "headers": {"Authorization": "Bearer ${GITHUB_PERSONAL_ACCESS_TOKEN}"}
+    }
+  }
+}
 ```
 
-已有 `data/.env` 时，命令显示配置完整的提供商并允许切换，输入模型名称或回车保留已有名称。
+`able=false` 的插件不会向模型注册工具，也不会启动或连接 MCP。MCP 工具名为 `服务名__工具名`，整组跟随所属插件开关。HTTP `headers` 和 stdio `env` 支持 `${KEY_NAME}` 引用 secrets，请将真实 Key 放在 secrets 中。
 
-选择后完整替换 `data/active-model.env`，内容只有四项：
+主图新增 `check_legal_enabled` 节点：
 
-```dotenv
-MODEL_PROVIDER='deepseek'
-MODEL_NAME='deepseek-flash'
-MODEL_API_KEY='your_deepseek_key'
-MODEL_BASE_URL='https://api.deepseek.com'
+```text
+START → check_legal_enabled
+          ├─ legal.able=true  → legal_flow → 原有法律/通用流程
+          └─ legal.able=false → general_agent → END
 ```
 
-`LLM_CLI_DATA_DIR` 可覆盖数据目录；默认数据目录位于当前项目根目录下。从项目根目录运行命令，确保配置和启动使用同一目录。当前文件包含明文 Key，不要提交或分享。
+关闭法律子图会跳过法律分类、检索和补充信息流程，清除当前路由的活动案件引用并保留历史案件。法律检索工具只供法律子图使用。内置命令仅在 Windows 注册；Windows 上不重复连接同名终端 MCP。
 
-## 3. 启动
+## 查询和修改接口
 
-`agent100 newchat` 在启动时读取当前配置。四个模型字段只来自 `active-model.env`，不受系统环境变量或源 `.env` 中同名字段覆盖。配置文件缺失或连接配置无效时提示执行 `agent100 config`。
+接口复用现有 `AGENT_API_TOKEN` Bearer 鉴权，可通过后端 `/docs` 查看。
 
-修改源 `.env` 不会自动更换运行中的模型或下次启动的模型。需要再次执行 `config` 才会更新当前快照；正在运行的会话保持原来的连接。
+| 方法 | 路径 | 功能 |
+| --- | --- | --- |
+| GET | `/v1/config` | 查询三个配置字段 |
+| GET / PATCH | `/v1/config/models` | 查询或修改模型设置 |
+| GET / PATCH | `/v1/config/mouldes` | 查询或修改插件和法律开关 |
+| GET / PATCH | `/v1/config/secrets` | 查询 Key 状态，添加、替换或删除 Key |
 
-源 `.env` 中的 `ZAI_API_KEY`、QQ SMTP 变量仍供搜索、邮件等工具使用，与当前模型的四个字段分开。选择 GLM 时输入的 Key 同时可供 Web Search 使用；选择 DeepSeek 时，如需 Web Search，仍需在 `data/.env` 中另行添加 `ZAI_API_KEY`。
+PATCH 递归合并指定字段，保留未提交的配置。`able` 只接受 JSON 布尔值。未知字段、无效模型引用或错误类型返回 422，文件不可写返回 503。保存使用文件锁和临时文件原子替换。
 
-DeepSeek 的 `tokenization()` 使用最小流式请求读取输入用量，会产生 API 费用。
+关闭法律子图与网络搜索：
 
-## English
+```http
+PATCH /v1/config/mouldes
+Content-Type: application/json
 
-On the first `agent100 config` run, select GLM or DeepSeek, securely enter the API key, and enter a model name or press Enter for the built-in default. Provider base URLs are built in and are not requested. The command creates `data/.env` and `data/active-model.env`.
+{"legal":{"able":false},"plugins":{"web_search":{"able":false}}}
+```
 
-The active file contains exactly four fields: `MODEL_PROVIDER`, `MODEL_NAME`, `MODEL_API_KEY`, and `MODEL_BASE_URL`. Runtime model settings come exclusively from this snapshot. Later `config` runs switch among providers already configured in `data/.env`.
+修改当前模型及模型名称：
+
+```http
+PATCH /v1/config/models
+Content-Type: application/json
+
+{"active":"deepseek","models":{"deepseek":{"model":"deepseek-flash"}}}
+```
+
+更新 Key；`null` 删除文件中的值，删除后允许回退到环境变量：
+
+```http
+PATCH /v1/config/secrets
+Content-Type: application/json
+
+{"keys":{"DEEPSEEK_API_KEY":"new-key","OLD_KEY":null}}
+```
+
+secrets 查询及修改响应只返回 `{"keys":{"DEEPSEEK_API_KEY":true}}` 这样的状态。模型和插件查询会返回其参数，连接参数中应使用凭据引用。
+
+修改成功后刷新 API 的应用配置。Worker 每次创建 Agent 时读取最新插件和法律开关；提交运行时冻结模型名称、地址和 Key 引用，执行时在本机解析 Key，Key 不进入队列或事件。正在执行的运行与终端会话保留已加载的配置，终端重启后生效。已有暂停断点恢复时按原待执行节点继续，不重走入口开关。

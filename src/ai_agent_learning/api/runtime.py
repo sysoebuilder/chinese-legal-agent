@@ -7,6 +7,8 @@ from contextlib import AsyncExitStack, asynccontextmanager
 import httpx
 
 from ai_agent_learning.api.errors import WindowsTerminalUnavailable
+from ai_agent_learning.config import APPConfig, load_app_config, use_app_config
+from ai_agent_learning.config.plugins import configured_mcp_servers
 from ai_agent_learning.langchain_agent.checkpoint import open_checkpointer
 from ai_agent_learning.langchain_agent.memory import MemoryWorker
 from ai_agent_learning.langchain_agent.middleware.memory import (
@@ -18,36 +20,21 @@ from ai_agent_learning.langchain_agent.runtime import (
     create_new_chat_agent,
 )
 from ai_agent_learning.mcp_client import connect_servers
-from ai_agent_learning.model_config import (
-    ModelConfig,
-    load_active_model,
-    load_model_choices,
-)
+from ai_agent_learning.model_config import ModelConfig
 from ai_agent_learning.qdrant_config import DEFAULT_QDRANT_URL
 
 
-def resolve_model(public_config: dict[str, str]) -> ModelConfig:
-    """冻结提交时的模型参数，执行时在本机读取 Key，Key 不进入队列或事件。"""
-    try:
-        active = load_active_model()
-    except SystemExit:
-        active = None
-    candidates = ([active] if active else []) + load_model_choices()
-    source = next(
-        (
-            c
-            for c in candidates
-            if c.provider == public_config["provider"] and c.api_key
-        ),
-        None,
-    )
-    if source is None:
-        raise ValueError("运行所需模型凭据缺失，请在终端配置模型")
+def resolve_model(public_config: dict[str, str], app_config: APPConfig | None = None) -> ModelConfig:
+    """冻结提交时的模型参数，执行时从 secrets 读取 Key。"""
+    app_config = app_config or load_app_config()
+    key_ref = public_config.get("api_key_ref")
+    if not key_ref:
+        # 兼容旧队列中仅包含 provider/model/base_url 的运行。
+        entry = next((entry for entry in app_config.modelconfig.models.values() if entry.provider == public_config["provider"]), None)
+        key_ref = entry.api_key_ref if entry else ""
     config = ModelConfig(
-        public_config["provider"],
-        public_config["model"],
-        source.api_key,
-        public_config["base_url"],
+        public_config["provider"], public_config["model"],
+        app_config.secretsconfig.get(key_ref), public_config["base_url"],
     )
     config.validate()
     return config
@@ -60,21 +47,18 @@ async def open_worker_agent(database_url: str, public_config: dict[str, str]):
     async with httpx.AsyncClient(timeout=5, trust_env=False) as client:
         response = await client.get(f"{qdrant_url}/collections")
         response.raise_for_status()
-    config = resolve_model(public_config)
-    # 复用终端入口的 MCP 配置，不执行终端交互。
-    from ai_agent_learning.langchain_agent.run import (
-        LOCAL_MCP_SERVERS,
-        configured_cloud_servers,
-    )
+    app_config = load_app_config()
+    config = resolve_model(public_config, app_config)
 
     async with AsyncExitStack() as stack:
+        stack.enter_context(use_app_config(app_config))
         saver = await stack.enter_async_context(open_checkpointer(database_url))
         tools = []
-        cloud_servers = configured_cloud_servers()
-        if LOCAL_MCP_SERVERS or cloud_servers:
+        local_servers, cloud_servers = configured_mcp_servers(app_config)
+        if local_servers or cloud_servers:
             connections = await stack.enter_async_context(
                 connect_servers(
-                    local_servers=LOCAL_MCP_SERVERS,
+                    local_servers=local_servers,
                     cloud_servers=cloud_servers,
                 )
             )
@@ -94,5 +78,6 @@ async def open_worker_agent(database_url: str, public_config: dict[str, str]):
             checkpointer=saver,
             memory_middleware=MemorySaveMiddleware(memory_queue),
             mcp_tools=tools,
+            app_config=app_config,
         )
         yield agent

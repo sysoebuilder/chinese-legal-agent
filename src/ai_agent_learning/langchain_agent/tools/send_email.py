@@ -1,6 +1,5 @@
 """send_email 工具实现与 LangChain 注册。"""
 
-import os
 import asyncio
 import mimetypes
 import smtplib
@@ -13,6 +12,7 @@ from pathlib import Path
 from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, ConfigDict, Field
 
+from ai_agent_learning.config.context import get_secret
 from ai_agent_learning.langchain_agent.tools.risk import RiskLevel
 
 TOOL_DESCRIPTION = (
@@ -56,8 +56,8 @@ def _send_email(
     body: str,
     attachment_path: str | None,
 ) -> dict[str, str]:
-    username = os.getenv("QQ_SMTP_USERNAME", "").strip()
-    auth_code = os.getenv("QQ_SMTP_AUTH_CODE", "").strip()
+    username = get_secret("QQ_SMTP_USERNAME")
+    auth_code = get_secret("QQ_SMTP_AUTH_CODE")
     if not username or not auth_code:
         raise ValueError("请配置 QQ_SMTP_USERNAME 和 QQ_SMTP_AUTH_CODE。")
 

@@ -177,7 +177,7 @@ export function Sidebar(props: Props) {
           onClick={props.onSettings}
         >
           <IconSettings />
-          <span>连接设置</span>
+          <span>模型与插件</span>
         </button>
       </div>
     </motion.aside>

@@ -1,5 +1,4 @@
 import asyncio
-import os
 from contextlib import asynccontextmanager
 from io import StringIO
 from types import SimpleNamespace
@@ -10,6 +9,7 @@ from langchain_core.runnables import RunnableConfig
 from pydantic import SecretStr
 from rich.console import Console
 
+from ai_agent_learning.config import APPConfig
 from ai_agent_learning.langchain_agent import chat as chat_module
 from ai_agent_learning.langchain_agent import run as run_module
 from ai_agent_learning.langchain_agent import runtime
@@ -105,6 +105,7 @@ def test_new_chat_exit_before_first_message_does_not_create_session(monkeypatch,
     def fake_create_agent(*args, **kwargs):
         assert kwargs["mcp_tools"] is mcp_tools
         assert kwargs["checkpointer"] is postgres_checkpointer
+        assert isinstance(kwargs["app_config"], APPConfig)
         return object()
 
     monkeypatch.setattr("builtins.input", lambda _: "0")
@@ -112,14 +113,24 @@ def test_new_chat_exit_before_first_message_does_not_create_session(monkeypatch,
     monkeypatch.setattr(run_module, "migrate_database", lambda _: None)
     monkeypatch.setattr(run_module, "configure_logging", lambda _: None)
     monkeypatch.setattr(run_module, "shutdown_logging", lambda: None)
-    monkeypatch.setattr(run_module, "load_active_model", lambda: SimpleNamespace(model="test"))
+    monkeypatch.setattr(run_module, "load_app_config", APPConfig)
+    monkeypatch.setattr(APPConfig, "active_model", lambda _: SimpleNamespace(model="test"))
     monkeypatch.setattr(run_module, "QdrantServer", FakeServer)
     monkeypatch.setattr(run_module, "TerminalUI", FakeUI)
     monkeypatch.setattr(run_module, "MemoryWorker", FakeWorker)
     monkeypatch.setattr(run_module, "create_langchain_model", lambda _: object())
     monkeypatch.setattr(run_module, "create_new_chat_agent", fake_create_agent)
     monkeypatch.setattr(run_module, "connect_servers", fake_connect_servers)
-    monkeypatch.setattr(run_module, "CLOUD_MCP_SERVERS", {"remote": {"url": "https://remote.example/mcp"}})
+    def fake_mcp_config(config):
+        cloud = {"remote": {"url": "https://remote.example/mcp"}}
+        if system_name != "nt":
+            cloud["windows_terminal"] = {
+                "url": "http://host.docker.internal:8765/mcp",
+                "read_timeout_seconds": 330, "trust_env": False,
+            }
+        return {}, cloud
+
+    monkeypatch.setattr(run_module, "configured_mcp_servers", fake_mcp_config)
     monkeypatch.setenv("WINDOWS_MCP_URL", "http://host.docker.internal:8765/mcp")
     monkeypatch.setenv("CHECKPOINT_DATABASE_URL", "postgresql://localhost/test")
     monkeypatch.setattr(run_module, "open_session_store", fake_session_store)

@@ -4,7 +4,6 @@
 """
 
 import json
-import os
 import re
 from collections.abc import AsyncIterator, Mapping
 from contextlib import AsyncExitStack, asynccontextmanager
@@ -19,6 +18,8 @@ from mcp import Client, StdioServerParameters
 from mcp.client.streamable_http import streamable_http_client
 from mcp.types import CallToolResult, Tool
 
+from ai_agent_learning.config.context import get_secret
+
 
 class CloudServerConfig(TypedDict):
     url: str
@@ -27,11 +28,11 @@ class CloudServerConfig(TypedDict):
     trust_env: NotRequired[bool]
 
 
-def resolve_headers(headers: Mapping[str, str]) -> dict[str, str]:
+def resolve_headers(headers: Mapping[str, str], *, secrets=None) -> dict[str, str]:
     """把请求头中的 ${ENV_NAME} 替换为环境变量，缺失时报告配置错误。"""
     def replace(match: re.Match[str]) -> str:
         name = match.group(1)
-        value = os.getenv(name, "").strip()
+        value = secrets.get(name) if secrets is not None else get_secret(name)
         if not value:
             raise ValueError(f"MCP 请求头缺少环境变量：{name}")
         return value

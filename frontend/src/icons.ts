@@ -13,3 +13,7 @@ export { default as IconSquare } from "@tabler/icons-react/dist/esm/icons/IconSq
 export { default as IconSun } from "@tabler/icons-react/dist/esm/icons/IconSun.mjs";
 export { default as IconTrash } from "@tabler/icons-react/dist/esm/icons/IconTrash.mjs";
 export { default as IconX } from "@tabler/icons-react/dist/esm/icons/IconX.mjs";
+export { default as IconCpu } from "@tabler/icons-react/dist/esm/icons/IconCpu.mjs";
+export { default as IconPlug } from "@tabler/icons-react/dist/esm/icons/IconPlug.mjs";
+export { default as IconScale } from "@tabler/icons-react/dist/esm/icons/IconScale.mjs";
+export { default as IconKey } from "@tabler/icons-react/dist/esm/icons/IconKey.mjs";

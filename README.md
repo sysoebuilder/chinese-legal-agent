@@ -46,7 +46,7 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e .
 ```
 
-首次运行 `agent100 config` 时，程序会自动检测配置：选择 GLM 或 DeepSeek，隐藏输入 API Key，再输入模型名称（回车使用默认名称）。服务地址使用内置默认值，无需填写。程序会创建 `data/.env` 并把当前选择写入 `data/active-model.env`。之后再次运行 `config` 可从已配置的提供商中切换模型。详见 [模型配置](docs/model-configuration.md)。
+首次运行 `agent100 config` 时，程序会自动检测配置：选择 GLM 或 DeepSeek，隐藏输入 API Key，再输入模型名称（回车使用默认名称）。服务地址使用内置默认值，无需填写。程序将模型、插件和密钥分别写入 `data/models.json`、`data/mouldes.json`、`data/secrets.json`，启动时统一加载为 `APPConfig`。之后再次运行 `config` 可从已配置的提供商中切换模型。配置接口和插件开关详见 [应用配置](docs/model-configuration.md)。
 
 ```powershell
 .\.venv\Scripts\agent100.exe --version
@@ -71,7 +71,7 @@ docker compose run --rm --no-deps -p 8000:8000 worker python -m ai_agent_learnin
 
 远端 MCP 地址为 `http://<公网 IP>:8000/mcp`。若本机在路由器后面，还需要将公网端口转发至这台计算机，并允许该端口通过主机防火墙；HTTP 模式目前不设鉴权。
 
-法律检索复用 Compose 应用数据卷中的 BM25 索引和 Qdrant `npc_laws` 集合；模型与工具凭据继续读取主机 `data/.env`。先启动 Compose 数据库，在容器中运行法律 MCP 或聊天程序。Qdrant 不可用时报告错误，不再自动创建本机数据库。
+法律检索复用 Compose 应用数据卷中的 BM25 索引和 Qdrant `npc_laws` 集合；模型与工具凭据读取主机 `data/secrets.json`，首次启动兼容迁移旧模型配置。先启动 Compose 数据库，在容器中运行法律 MCP 或聊天程序。Qdrant 不可用时报告错误，不再自动创建本机数据库。
 
 Web Search 功能基于 GLM 搜索引擎实现，长期记忆使用 GLM Embedding-3 生成向量，两项功能都必须配置 GLM API Key（环境变量名为 `ZAI_API_KEY`）；即使当前对话模型选择 DeepSeek，该配置仍不可省略。邮件工具另需配置 `QQ_SMTP_USERNAME` 和 `QQ_SMTP_AUTH_CODE`，后者是 SMTP 授权码，不是邮箱登录密码。模型、搜索和向量化调用使用你自己的服务账号，可能产生费用。
 
@@ -122,6 +122,7 @@ worker 中的工具名是 `windows_terminal__run_command`，`working_directory` 
 | `src/ai_agent_learning/langchain_agent/` | LangChain/LangGraph Agent、会话、中间件与工具适配 |
 | `src/ai_agent_learning/langchain_agent/tools/` | 工具实现、LangChain 注册与风险元数据；`run_command/` 包含 Windows 进程管理 |
 | `src/ai_agent_learning/mcp_server/` | 独立 stdio MCP Server 与法律检索工具 |
+| `src/ai_agent_learning/config/` | APPConfig、配置文件加载、旧配置迁移和原子更新 |
 | `src/ai_agent_learning/memory/` | 候选记忆提取、向量化、旧记忆检索、决策及 Qdrant 持久化 |
 | `src/ai_agent_learning/ui/` | 终端展示与工具确认 |
 | `tests/` | LangChain Agent、工具、配置与终端相关测试 |
@@ -176,7 +177,7 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e .
 ```
 
-On the first `agent100 config` run, the program detects that configuration is missing, asks you to select GLM or DeepSeek, securely enter an API key, and enter a model name (Enter uses the default). Provider URLs are built in and are not requested. It creates `data/.env` and writes the active selection to `data/active-model.env`. Later `config` runs can switch among configured providers. See [model configuration](docs/model-configuration.md).
+On the first `agent100 config` run, the program detects that configuration is missing, asks you to select GLM or DeepSeek, securely enter an API key, and enter a model name (Enter uses the default). Provider URLs are built in and are not requested. It stores models, plugins, and credentials in `data/models.json`, `data/mouldes.json`, and `data/secrets.json`, loaded into `APPConfig` at startup. Later `config` runs can switch among configured providers. See [application configuration](docs/model-configuration.md).
 
 ```powershell
 .\.venv\Scripts\agent100.exe --version

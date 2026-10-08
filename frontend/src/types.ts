@@ -81,3 +81,46 @@ export interface LiveMessage {
   reasoning: string;
   status: string;
 }
+
+export interface ModelEntry {
+  provider: "glm" | "deepseek";
+  model: string;
+  base_url: string;
+  api_key_ref: string;
+}
+export interface ModelsConfig {
+  active: string;
+  models: Record<string, ModelEntry>;
+}
+export interface PluginConfig {
+  kind: "builtin" | "http" | "stdio";
+  able: boolean;
+  url: string | null;
+  headers: Record<string, string>;
+  command: string | null;
+  args: string[];
+  env: Record<string, string>;
+  cwd: string | null;
+  read_timeout_seconds: number;
+  trust_env: boolean;
+}
+export interface MouldesConfig {
+  legal: { able: boolean };
+  plugins: Record<string, PluginConfig>;
+}
+export interface SecretsConfig {
+  keys: Record<string, boolean>;
+}
+export interface AppConfig {
+  modelconfig: ModelsConfig;
+  mouldesconfig: MouldesConfig;
+  secretsconfig: SecretsConfig;
+}
+export interface ModelsPatch {
+  active?: string;
+  models?: Record<string, ModelEntry>;
+}
+export interface MouldesPatch {
+  legal?: { able: boolean };
+  plugins?: Record<string, { able: boolean }>;
+}

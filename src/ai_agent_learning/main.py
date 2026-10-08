@@ -7,7 +7,6 @@ from ai_agent_learning.model_config import (
     load_model_choices,
     save_active_model,
     save_source_model,
-    source_config_path,
 )
 from ai_agent_learning.ui.terminal import TerminalUI
 
@@ -16,8 +15,10 @@ def run_config() -> None:
     """选择模型配置并保存为当前配置。"""
     ui = TerminalUI()
     try:
-        source = source_config_path()
-        choices = load_model_choices() if source.is_file() else []
+        from ai_agent_learning.config import config_dir
+
+        source = config_dir() / "models.json"
+        choices = load_model_choices()
         configured = False
         for choice in choices:
             try:
@@ -38,7 +39,7 @@ def run_config() -> None:
             save_source_model(selected)
         path = save_active_model(selected)
     except (OSError, UnicodeError, ValueError):
-        ui.show_error("无法读取或保存配置，请检查项目 .env 和数据目录权限。")
+        ui.show_error("无法读取或保存配置，请检查 models.json、secrets.json 和配置目录权限。")
         return
     ui.show_notice(f"当前模型：{selected.provider} / {selected.model}")
     ui.show_notice(f"已更新：{path}")

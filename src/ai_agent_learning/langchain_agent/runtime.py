@@ -17,6 +17,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from pydantic import SecretStr
 
+from ai_agent_learning.config import APPConfig
 from ai_agent_learning.langchain_agent.approval import build_interrupt_on
 from ai_agent_learning.langchain_agent.deepseek import (
     ChatDeepSeekWithJsonReasoning as ChatDeepSeek,
@@ -77,18 +78,28 @@ def create_langchain_model(config: ModelConfig) -> BaseChatModel:
 
 
 def create_new_chat_agent(
-    config: ModelConfig,
+    config: ModelConfig | APPConfig,
     *,
     checkpointer: BaseCheckpointSaver | None = None,
     model: BaseChatModel | None = None,
     memory_middleware: MemorySaveMiddleware | None = None,
     mcp_tools: Sequence[BaseTool] | None = None,
+    app_config: APPConfig | None = None,
 ) -> CompiledStateGraph:
-    """创建以法律子图为前置路由的新版 Agent。"""
+    """根据应用配置过滤工具，并在主图入口判断是否启用法律子图。"""
+    if isinstance(config, APPConfig):
+        app_config = config
+        config = config.active_model()
+    app_config = app_config or APPConfig()
     model = model or create_langchain_model(config)
-    general_tools: list[BaseTool] = [tool for tool in ALL_TOOLS if tool.name != "search_laws"]
+    general_tools: list[BaseTool] = [
+        tool for tool in ALL_TOOLS
+        if tool.name != "search_laws" and app_config.mouldesconfig.tool_enabled(tool.name)
+    ]
     registered_names = {tool.name for tool in general_tools}
     for tool in mcp_tools or []:
+        if not app_config.mouldesconfig.tool_enabled(tool.name):
+            continue
         if tool.name in registered_names:
             raise ValueError(f"重复的工具名称：{tool.name}")
         general_tools.append(tool)
@@ -110,10 +121,15 @@ def create_new_chat_agent(
             description_prefix="工具执行需要确认",
         )
     )
+    # 避免提示词要求模型调用已被用户关闭的工具。
+    prompt = "\n".join(
+        line for line in SYSTEM_PROMPT.splitlines()
+        if not any(name in line and name not in registered_names for name in ("current_time", "web_search", "search_memory"))
+    )
     general_agent = create_agent(
         model=model,
         tools=general_tools,
-        system_prompt=SYSTEM_PROMPT,
+        system_prompt=prompt,
         middleware=middleware,
         state_schema=LegalAgentState,
         name="general_agent",
@@ -134,7 +150,17 @@ def create_new_chat_agent(
         return {}
 
     graph.add_node("queue_legal_memory", queue_legal_memory)
-    graph.add_edge(START, "legal_flow")
+
+    def check_legal_enabled(state: LegalAgentState) -> dict[str, object]:
+        return {} if app_config.mouldesconfig.legal.able else {"active_case_id": None}
+
+    graph.add_node("check_legal_enabled", check_legal_enabled)
+    graph.add_edge(START, "check_legal_enabled")
+    graph.add_conditional_edges(
+        "check_legal_enabled",
+        lambda state: "legal_flow" if app_config.mouldesconfig.legal.able else "general_agent",
+        {"legal_flow": "legal_flow", "general_agent": "general_agent"},
+    )
     graph.add_conditional_edges(
         "legal_flow",
         _route_after_legal_flow,

@@ -13,11 +13,11 @@ from rich.spinner import Spinner
 from rich.table import Table
 from rich.text import Text
 
+from ai_agent_learning.config import config_dir
 from ai_agent_learning.model_config import (
     PROVIDER_DEFAULTS,
     ModelConfig,
     create_model_config,
-    source_config_path,
 )
 
 
@@ -88,7 +88,7 @@ class TerminalUI:
             table.add_row(str(index), choice.provider, status)
         self.console.print(table)
         if not valid:
-            self.show_error(f"没有可用配置，请补全 {source_config_path()} 中缺失的字段。")
+            self.show_error(f"没有可用配置，请补全 {config_dir()} 中的 models.json 和 secrets.json。")
             return None
         while True:
             try:
