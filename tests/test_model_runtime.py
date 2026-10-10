@@ -2,8 +2,8 @@
 
 from pydantic import SecretStr
 
-from ai_agent_learning.langchain_agent import runtime
-from ai_agent_learning.model_config import ModelConfig
+from chinese_legal_agent.langchain_agent import runtime
+from chinese_legal_agent.model_config import ModelConfig
 
 
 def test_create_langchain_model_uses_deepseek_adapter(monkeypatch):

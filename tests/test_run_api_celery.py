@@ -16,14 +16,14 @@ from psycopg import sql
 from psycopg.conninfo import make_conninfo
 from redis import Redis
 
-from ai_agent_learning.api import worker
-from ai_agent_learning.api.app import create_app
-from ai_agent_learning.api.celery_app import CeleryPublisher, celery_app
-from ai_agent_learning.api.settings import ApiSettings
-from ai_agent_learning.api.store import PostgresRunStore
-from ai_agent_learning.database import get_database_url, migrate_database
-from ai_agent_learning.langchain_agent.checkpoint import open_checkpointer
-from ai_agent_learning.model_config import ModelConfig
+from chinese_legal_agent.api import worker
+from chinese_legal_agent.api.app import create_app
+from chinese_legal_agent.api.celery_app import CeleryPublisher, celery_app
+from chinese_legal_agent.api.settings import ApiSettings
+from chinese_legal_agent.api.store import PostgresRunStore
+from chinese_legal_agent.database import get_database_url, migrate_database
+from chinese_legal_agent.langchain_agent.checkpoint import open_checkpointer
+from chinese_legal_agent.model_config import ModelConfig
 
 pytestmark = pytest.mark.skipif(
     os.getenv("AGENT_TEST_REDIS") != "1", reason="默认不连接 Redis/Celery"
@@ -170,8 +170,8 @@ def test_real_redis_live_delivery_has_no_replay_and_releases_subscription():
     from datetime import UTC, datetime
     from types import SimpleNamespace
 
-    from ai_agent_learning.api.app import stream_events
-    from ai_agent_learning.api.events import RedisEventBus
+    from chinese_legal_agent.api.app import stream_events
+    from chinese_legal_agent.api.events import RedisEventBus
 
     redis_url = os.getenv("AGENT_TEST_REDIS_URL", "redis://127.0.0.1:6379/15")
     run_id = str(uuid4())
@@ -214,7 +214,7 @@ def test_real_redis_live_delivery_has_no_replay_and_releases_subscription():
             assert f'"text": "{index}"' in frame
             assert "旧思考" not in frame and "id:" not in frame
         row.update(status="succeeded", answer="完成", revision=3)
-        from ai_agent_learning.api.store import PostgresRunStore
+        from chinese_legal_agent.api.store import PostgresRunStore
 
         publisher.publish(
             run_id, "run.state", PostgresRunStore.view(row).model_dump(mode="json")

@@ -10,8 +10,8 @@ from pathlib import Path
 import httpx
 import pytest
 
-from ai_agent_learning import initialize
-from ai_agent_learning import initialize_resources as resources
+from chinese_legal_agent import initialize
+from chinese_legal_agent import initialize_resources as resources
 
 
 def checksum(value):

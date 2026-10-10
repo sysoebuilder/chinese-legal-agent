@@ -16,9 +16,9 @@ from langgraph.types import Command, interrupt
 from psycopg import sql
 from psycopg.conninfo import make_conninfo
 
-from ai_agent_learning.database import migrate_database
-from ai_agent_learning.langchain_agent.checkpoint import open_checkpointer
-from ai_agent_learning.logging_config import configure_logging, shutdown_logging
+from chinese_legal_agent.database import migrate_database
+from chinese_legal_agent.langchain_agent.checkpoint import open_checkpointer
+from chinese_legal_agent.logging_config import configure_logging, shutdown_logging
 
 
 @pytest.fixture

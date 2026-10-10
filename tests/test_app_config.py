@@ -9,12 +9,12 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.graph import END, START, StateGraph
 
-from ai_agent_learning.api.runtime import resolve_model
-from ai_agent_learning.config import APPConfig, ConfigStore, get_secret, use_app_config
-from ai_agent_learning.config.plugins import configured_mcp_servers
-from ai_agent_learning.langchain_agent import runtime
-from ai_agent_learning.langchain_agent.legal.state import LegalAgentState
-from ai_agent_learning.mcp_client import resolve_headers
+from chinese_legal_agent.api.runtime import resolve_model
+from chinese_legal_agent.config import APPConfig, ConfigStore, get_secret, use_app_config
+from chinese_legal_agent.config.plugins import configured_mcp_servers
+from chinese_legal_agent.langchain_agent import runtime
+from chinese_legal_agent.langchain_agent.legal.state import LegalAgentState
+from chinese_legal_agent.mcp_client import resolve_headers
 
 
 def test_load_migrates_legacy_and_separates_keys(tmp_path, monkeypatch):
@@ -102,8 +102,8 @@ def test_corrupt_file_is_not_silently_replaced(tmp_path):
 
 @pytest.mark.parametrize("platform", ["nt", "posix"])
 def test_mcp_config_excludes_disabled_and_resolves_stdio_secrets(monkeypatch, platform):
-    from ai_agent_learning.config import plugins
-    from ai_agent_learning.config.schema import PluginConfig
+    from chinese_legal_agent.config import plugins
+    from chinese_legal_agent.config.schema import PluginConfig
 
     config = APPConfig()
     config.mouldesconfig.plugins = {
@@ -176,8 +176,8 @@ def test_graph_legal_switch_and_plugin_tool_filter(monkeypatch, enabled):
     app.mouldesconfig.legal.able = enabled
     app.mouldesconfig.plugins["web_search"].able = False
     app.mouldesconfig.plugins["github"].able = False
-    from ai_agent_learning.config.schema import PluginConfig
-    from ai_agent_learning.model_config import ModelConfig
+    from chinese_legal_agent.config.schema import PluginConfig
+    from chinese_legal_agent.model_config import ModelConfig
 
     app.mouldesconfig.plugins["windows_terminal"] = PluginConfig(
         kind="http", url="http://host.docker.internal:8766/mcp"

@@ -4,7 +4,7 @@ import importlib.util
 
 import pytest
 
-from ai_agent_learning.langchain_agent import tools
+from chinese_legal_agent.langchain_agent import tools
 
 
 @pytest.mark.parametrize("platform", ["nt", "posix"])

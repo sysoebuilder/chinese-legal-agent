@@ -1,6 +1,6 @@
 import json
 
-from ai_agent_learning.langchain_agent.legal.nodes import LegalNodes
+from chinese_legal_agent.langchain_agent.legal.nodes import LegalNodes
 
 
 def test_decision_context_includes_past_keywords_without_repeating_case_facts():

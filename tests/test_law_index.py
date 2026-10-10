@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from ai_agent_learning.law_index import LawBm25Index
+from chinese_legal_agent.law_index import LawBm25Index
 
 
 def test_title_candidates_include_all_top_score_ties() -> None:

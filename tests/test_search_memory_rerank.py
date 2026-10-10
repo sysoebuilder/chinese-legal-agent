@@ -4,7 +4,7 @@ import asyncio
 import threading
 from types import SimpleNamespace
 
-from ai_agent_learning.langchain_agent.tools import search_memory as builtin
+from chinese_legal_agent.langchain_agent.tools import search_memory as builtin
 
 
 class FakeMemory:

@@ -4,7 +4,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from ai_agent_learning.langchain_agent.tools import send_email
+from chinese_legal_agent.langchain_agent.tools import send_email
 
 
 @pytest.fixture

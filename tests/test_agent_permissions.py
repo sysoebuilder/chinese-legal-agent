@@ -11,12 +11,12 @@ from langchain_core.tools import StructuredTool
 from langgraph.types import Command
 from test_config_api import app_for
 
-from ai_agent_learning.api.runtime import resolve_permissions
-from ai_agent_learning.config import ConfigStore, PermissionsConfig
-from ai_agent_learning.langchain_agent import runtime
-from ai_agent_learning.langchain_agent.approval import build_interrupt_on
-from ai_agent_learning.langchain_agent.tools.risk import RiskLevel
-from ai_agent_learning.model_config import ModelConfig
+from chinese_legal_agent.api.runtime import resolve_permissions
+from chinese_legal_agent.config import ConfigStore, PermissionsConfig
+from chinese_legal_agent.langchain_agent import runtime
+from chinese_legal_agent.langchain_agent.approval import build_interrupt_on
+from chinese_legal_agent.langchain_agent.tools.risk import RiskLevel
+from chinese_legal_agent.model_config import ModelConfig
 
 
 @pytest.mark.parametrize("mode", ["restricted", "unrestricted"])

@@ -16,15 +16,15 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, MessagesState, StateGraph
 from langgraph.types import interrupt
 
-from ai_agent_learning.api.app import create_app, stream_events
-from ai_agent_learning.api.celery_app import create_celery, dispatch_pending
-from ai_agent_learning.api.events import as_sse
-from ai_agent_learning.api.execution import CancellationGuard, RunCancelled
-from ai_agent_learning.api.schemas import validate_responses
-from ai_agent_learning.api.settings import ApiSettings
-from ai_agent_learning.api.store import RunConflict, RunNotFound
-from ai_agent_learning.api.worker import RunBusy, execute_run
-from ai_agent_learning.model_config import ModelConfig
+from chinese_legal_agent.api.app import create_app, stream_events
+from chinese_legal_agent.api.celery_app import create_celery, dispatch_pending
+from chinese_legal_agent.api.events import as_sse
+from chinese_legal_agent.api.execution import CancellationGuard, RunCancelled
+from chinese_legal_agent.api.schemas import validate_responses
+from chinese_legal_agent.api.settings import ApiSettings
+from chinese_legal_agent.api.store import RunConflict, RunNotFound
+from chinese_legal_agent.api.worker import RunBusy, execute_run
+from chinese_legal_agent.model_config import ModelConfig
 
 MODEL = ModelConfig("glm", "test-model", "private-model-key", "https://model.example")
 PUBLIC_MODEL = {
@@ -120,7 +120,7 @@ class FakeStore:
         row = self.rows[run_id]
         row["revision"] += 1
         self.history[run_id].append(SimpleNamespace(event=event, data=data))
-        from ai_agent_learning.api.store import PostgresRunStore
+        from chinese_legal_agent.api.store import PostgresRunStore
 
         self.event_bus.publish(
             run_id, "run.state", PostgresRunStore.view(row).model_dump(mode="json")
@@ -602,7 +602,7 @@ def test_approval_cannot_change_tool_arguments(decision):
 
 
 def test_final_answer_does_not_return_previous_turn_when_current_turn_has_no_answer():
-    from ai_agent_learning.api.execution import final_answer
+    from chinese_legal_agent.api.execution import final_answer
 
     snapshot = SimpleNamespace(
         values={
@@ -707,7 +707,7 @@ def test_heartbeat_recovers_committed_state_when_publication_is_lost():
 
 
 def test_cancel_check_is_throttled_but_calls_and_completion_force_a_check(monkeypatch):
-    from ai_agent_learning.api import execution
+    from chinese_legal_agent.api import execution
 
     store = FakeStore()
     run_id = store.create("开始", None, PUBLIC_MODEL)["run_id"]
@@ -737,7 +737,7 @@ def test_cancel_check_is_throttled_but_calls_and_completion_force_a_check(monkey
 def test_redis_publish_failure_is_best_effort_and_backs_off(monkeypatch):
     from redis.exceptions import ConnectionError as RedisConnectionError
 
-    from ai_agent_learning.api import events
+    from chinese_legal_agent.api import events
 
     attempts = []
     clock = [0.0]

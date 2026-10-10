@@ -6,11 +6,11 @@ from unittest.mock import AsyncMock
 
 from qdrant_client import models
 
-from ai_agent_learning.langchain_agent.tools import ALL_TOOLS, TOOL_BY_NAME
-from ai_agent_learning.langchain_agent.tools import list_memories as builtin
-from ai_agent_learning.langchain_agent.tools.list_memories import list_memories_tool
-from ai_agent_learning.memory.schema import MemoryCandidate, StoredMemory
-from ai_agent_learning.memory.store import QdrantMemoryStore
+from chinese_legal_agent.langchain_agent.tools import ALL_TOOLS, TOOL_BY_NAME
+from chinese_legal_agent.langchain_agent.tools import list_memories as builtin
+from chinese_legal_agent.langchain_agent.tools.list_memories import list_memories_tool
+from chinese_legal_agent.memory.schema import MemoryCandidate, StoredMemory
+from chinese_legal_agent.memory.store import QdrantMemoryStore
 
 
 def _memory() -> StoredMemory:

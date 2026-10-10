@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from ai_agent_learning.langchain_agent import checkpoint as module
+from chinese_legal_agent.langchain_agent import checkpoint as module
 
 
 def test_requires_configuration_and_hides_invalid_url():

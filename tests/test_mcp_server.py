@@ -4,8 +4,8 @@ import asyncio
 
 from mcp import Client
 
-from ai_agent_learning.config import ConfigStore, get_secret
-from ai_agent_learning.mcp_server import server as server_module
+from chinese_legal_agent.config import ConfigStore, get_secret
+from chinese_legal_agent.mcp_server import server as server_module
 
 
 def test_search_laws_mcp_registration_and_call(monkeypatch, tmp_path) -> None:

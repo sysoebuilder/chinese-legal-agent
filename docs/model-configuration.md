@@ -48,11 +48,11 @@ Qdrant 已运行时可使用 `docker compose run --rm --no-deps initialize`。�
 也可以在本机执行同一入口：
 
 ```powershell
-.\.venv\Scripts\python.exe -m ai_agent_learning.initialize
+.\.venv\Scripts\python.exe -m chinese_legal_agent.initialize
 # 指定其他目录：
-.\.venv\Scripts\python.exe -m ai_agent_learning.initialize --config-dir ./data
+.\.venv\Scripts\python.exe -m chinese_legal_agent.initialize --config-dir ./data
 # 本机同时初始化法律和重排模型，需要先提供可访问的 QDRANT_URL：
-.\.venv\Scripts\python.exe -m ai_agent_learning.initialize --laws --reranker
+.\.venv\Scripts\python.exe -m chinese_legal_agent.initialize --laws --reranker
 ```
 
 本机入口默认只处理配置，可用 `--laws`、`--reranker` 启用资源阶段，或用 `--no-laws`、`--no-reranker` 显式跳过。`--data-dir` 指定索引/缓存目录，`--model-dir` 指定模型目录。此入口不生成部署参数 `.env`，不启动数据库服务；启用法律阶段时会恢复空的 Qdrant 法律集合。

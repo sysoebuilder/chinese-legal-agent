@@ -4,8 +4,8 @@ from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
-from ai_agent_learning.api.app import create_app
-from ai_agent_learning.api.settings import ApiSettings
+from chinese_legal_agent.api.app import create_app
+from chinese_legal_agent.api.settings import ApiSettings
 
 
 def test_backend_only_serves_api_and_preserves_authentication():

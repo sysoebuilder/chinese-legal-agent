@@ -6,7 +6,7 @@ import pytest
 from mcp import Client
 from starlette.testclient import TestClient
 
-from ai_agent_learning import mcp_terminal
+from chinese_legal_agent import mcp_terminal
 
 
 def test_terminal_registration_delegates_and_validates(monkeypatch):

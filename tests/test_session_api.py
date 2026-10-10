@@ -8,11 +8,11 @@ import pytest
 from fastapi.testclient import TestClient
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
-from ai_agent_learning.api.app import create_app
-from ai_agent_learning.api.history import history_page
-from ai_agent_learning.api.schemas import SessionPage, SessionView
-from ai_agent_learning.api.settings import ApiSettings
-from ai_agent_learning.api.store import RunNotFound
+from chinese_legal_agent.api.app import create_app
+from chinese_legal_agent.api.history import history_page
+from chinese_legal_agent.api.schemas import SessionPage, SessionView
+from chinese_legal_agent.api.settings import ApiSettings
+from chinese_legal_agent.api.store import RunNotFound
 
 
 def turns(count):

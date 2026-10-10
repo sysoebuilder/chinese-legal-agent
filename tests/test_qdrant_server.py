@@ -1,7 +1,7 @@
 import httpx
 import pytest
 
-from ai_agent_learning.qdrant_server import QdrantServer
+from chinese_legal_agent.qdrant_server import QdrantServer
 
 
 @pytest.mark.asyncio
@@ -31,8 +31,8 @@ async def test_qdrant_check_never_creates_a_native_database(monkeypatch, tmp_pat
 
 
 def test_configuration_directory_is_independent_from_database_data(monkeypatch, tmp_path):
-    from ai_agent_learning.config import ConfigStore
-    from ai_agent_learning.model_config import source_config_path
+    from chinese_legal_agent.config import ConfigStore
+    from chinese_legal_agent.model_config import source_config_path
 
     configured = tmp_path / "config"
     monkeypatch.setenv("AGENT_CONFIG_DIR", str(configured))

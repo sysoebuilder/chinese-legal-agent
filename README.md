@@ -153,13 +153,13 @@ docker compose down
 法律检索还提供独立的 MCP Server，暴露 `search_laws` 工具。在共享服务和初始化资源已就绪后，可通过 stdio 接入：
 
 ```powershell
-docker compose run --rm -T --no-deps worker python -m ai_agent_learning.mcp_server
+docker compose run --rm -T --no-deps worker python -m chinese_legal_agent.mcp_server
 ```
 
 需要 HTTP 接入时：
 
 ```powershell
-docker compose run --rm --no-deps -p 127.0.0.1:8000:8000 worker python -m ai_agent_learning.mcp_server --http --host 0.0.0.0 --port 8000
+docker compose run --rm --no-deps -p 127.0.0.1:8000:8000 worker python -m chinese_legal_agent.mcp_server --http --host 0.0.0.0 --port 8000
 ```
 
 MCP 地址为 `http://127.0.0.1:8000/mcp`，当前独立法律 MCP 的 HTTP 入口不提供鉴权。法律 MCP 与网页共用 Qdrant 法律集合、BM25 索引和本地重排模型。
@@ -168,14 +168,14 @@ MCP 地址为 `http://127.0.0.1:8000/mcp`，当前独立法律 MCP 的 HTTP 入�
 
 | 路径 | 内容 |
 | --- | --- |
-| `src/ai_agent_learning/langchain_agent/legal/` | 法律工作流、案件状态、结构化决策与回答检查 |
-| `src/ai_agent_learning/mcp_server/` | 法律检索与独立 MCP Server |
-| `src/ai_agent_learning/law_index.py` | 法律 BM25 索引 |
-| `src/ai_agent_learning/reranker.py` | 法律与记忆检索重排 |
-| `src/ai_agent_learning/api/` | Run API、SSE、任务调度与 checkpoint 恢复 |
-| `src/ai_agent_learning/config/` | 配置加载、旧配置迁移和原子更新 |
-| `src/ai_agent_learning/initialize*.py` | 配置、法律快照、BM25 与重排模型初始化 |
-| `src/ai_agent_learning/memory/` | 记忆提取、向量化、检索与持久化 |
+| `src/chinese_legal_agent/langchain_agent/legal/` | 法律工作流、案件状态、结构化决策与回答检查 |
+| `src/chinese_legal_agent/mcp_server/` | 法律检索与独立 MCP Server |
+| `src/chinese_legal_agent/law_index.py` | 法律 BM25 索引 |
+| `src/chinese_legal_agent/reranker.py` | 法律与记忆检索重排 |
+| `src/chinese_legal_agent/api/` | Run API、SSE、任务调度与 checkpoint 恢复 |
+| `src/chinese_legal_agent/config/` | 配置加载、旧配置迁移和原子更新 |
+| `src/chinese_legal_agent/initialize*.py` | 配置、法律快照、BM25 与重排模型初始化 |
+| `src/chinese_legal_agent/memory/` | 记忆提取、向量化、检索与持久化 |
 | `frontend/` | 网页界面 |
 | `tests/` | 工作流、接口、配置与恢复链路测试 |
 

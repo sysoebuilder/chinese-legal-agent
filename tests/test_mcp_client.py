@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 from langchain_core.tools import StructuredTool
 
-from ai_agent_learning.mcp_client import list_all_tools
+from chinese_legal_agent.mcp_client import list_all_tools
 
 
 def test_list_all_tools_binds_each_page_and_handles_errors():
@@ -46,7 +46,7 @@ def test_list_all_tools_binds_each_page_and_handles_errors():
 
 
 def test_cloud_servers_route_same_named_tools_and_close(monkeypatch):
-    from ai_agent_learning import mcp_client
+    from chinese_legal_agent import mcp_client
 
     events = []
 
@@ -85,7 +85,7 @@ def test_cloud_servers_route_same_named_tools_and_close(monkeypatch):
 
 
 def test_cloud_servers_discovery_failure_preserves_other_connections(monkeypatch):
-    from ai_agent_learning import mcp_client
+    from chinese_legal_agent import mcp_client
 
     closed = []
 
@@ -119,7 +119,7 @@ def test_cloud_servers_discovery_failure_preserves_other_connections(monkeypatch
 def test_mixed_servers_connection_failure_preserves_local(monkeypatch):
     from mcp import StdioServerParameters
 
-    from ai_agent_learning import mcp_client
+    from chinese_legal_agent import mcp_client
 
     closed = []
 
@@ -160,7 +160,7 @@ def test_mixed_servers_connection_failure_preserves_local(monkeypatch):
 
 
 def test_cloud_server_passes_auth_headers_and_closes_http_client(monkeypatch):
-    from ai_agent_learning import mcp_client
+    from chinese_legal_agent import mcp_client
 
     observed = {}
 
@@ -197,7 +197,7 @@ def test_cloud_server_passes_auth_headers_and_closes_http_client(monkeypatch):
 def test_connect_servers_uses_headers_from_cloud_config(monkeypatch):
     from contextlib import asynccontextmanager
 
-    from ai_agent_learning import mcp_client
+    from chinese_legal_agent import mcp_client
 
     observed = []
     monkeypatch.setenv("TEST_MCP_TOKEN", "test-token")

@@ -6,9 +6,9 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.errors import GraphInterrupt
 from langgraph.graph import END, START, StateGraph
 
-from ai_agent_learning.langchain_agent.legal import graph as legal_graph
-from ai_agent_learning.langchain_agent.legal.state import LegalAgentState
-from ai_agent_learning.logging_config import _record_payload
+from chinese_legal_agent.langchain_agent.legal import graph as legal_graph
+from chinese_legal_agent.langchain_agent.legal.state import LegalAgentState
+from chinese_legal_agent.logging_config import _record_payload
 
 
 def test_timed_node_records_success_without_changing_result(monkeypatch, caplog):

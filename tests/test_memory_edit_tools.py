@@ -4,9 +4,9 @@ import asyncio
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, call
 
-from ai_agent_learning.langchain_agent.tools import delete_memory as delete_module
-from ai_agent_learning.langchain_agent.tools import update_memory as update_module
-from ai_agent_learning.memory.schema import MemoryCandidate, StoredMemory
+from chinese_legal_agent.langchain_agent.tools import delete_memory as delete_module
+from chinese_legal_agent.langchain_agent.tools import update_memory as update_module
+from chinese_legal_agent.memory.schema import MemoryCandidate, StoredMemory
 
 
 def _stored_memory() -> StoredMemory:

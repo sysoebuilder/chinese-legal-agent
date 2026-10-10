@@ -10,15 +10,15 @@ import psutil
 import pytest
 from dotenv import dotenv_values
 
-from ai_agent_learning import mcp_terminal as terminal
+from chinese_legal_agent import mcp_terminal as terminal
 
 
 def test_terminal_import_does_not_load_unrelated_retrieval_dependencies():
     script = """
 import json, sys
-import ai_agent_learning.mcp_terminal
-unrelated = ['ai_agent_learning.memory', 'ai_agent_learning.law_index',
-             'ai_agent_learning.reranker', 'qdrant_client', 'bm25s']
+import chinese_legal_agent.mcp_terminal
+unrelated = ['chinese_legal_agent.memory', 'chinese_legal_agent.law_index',
+             'chinese_legal_agent.reranker', 'qdrant_client', 'bm25s']
 print(json.dumps([name for name in unrelated if name in sys.modules]))
 """
     result = subprocess.run(
@@ -123,7 +123,7 @@ def test_mcp_survives_start_command_exiting(tmp_path, monkeypatch):
     script = """
 import sys
 from pathlib import Path
-from ai_agent_learning import mcp_terminal as terminal
+from chinese_legal_agent import mcp_terminal as terminal
 root, port = Path(sys.argv[1]), int(sys.argv[2])
 terminal.PROJECT_ROOT = root
 sys.argv = ['mcp_terminal', '--port', str(port)]

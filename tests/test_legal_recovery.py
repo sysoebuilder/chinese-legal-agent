@@ -7,13 +7,13 @@ from langchain_core.messages import AIMessageChunk, HumanMessage
 from openai import APIStatusError
 from qdrant_client.http.exceptions import UnexpectedResponse
 
-from ai_agent_learning.langchain_agent.legal.graph import (
+from chinese_legal_agent.langchain_agent.legal.graph import (
     _route_decision,
     _route_final_answer,
     _route_retrieval,
 )
-from ai_agent_learning.langchain_agent.legal.nodes import LegalNodes
-from ai_agent_learning.langchain_agent.legal.schemas import LegalAnswerReviewOutput
+from chinese_legal_agent.langchain_agent.legal.nodes import LegalNodes
+from chinese_legal_agent.langchain_agent.legal.schemas import LegalAnswerReviewOutput
 
 
 def _state():

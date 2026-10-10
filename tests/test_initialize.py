@@ -16,7 +16,7 @@ def run_initializer(directory):
         [
             sys.executable,
             "-m",
-            "ai_agent_learning.initialize",
+            "chinese_legal_agent.initialize",
             "--config-dir",
             str(directory),
         ],

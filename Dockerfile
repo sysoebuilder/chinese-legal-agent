@@ -23,4 +23,4 @@ COPY src ./src
 RUN python -m pip install --no-cache-dir -e .
 
 EXPOSE 8001
-CMD ["python", "-m", "ai_agent_learning.api", "--host", "0.0.0.0", "--port", "8001"]
+CMD ["python", "-m", "chinese_legal_agent.api", "--host", "0.0.0.0", "--port", "8001"]

@@ -7,9 +7,9 @@ from contextlib import closing
 import bm25s
 from qdrant_client import QdrantClient
 
-from ai_agent_learning.law_index import INDEX_DIR, tokenize
-from ai_agent_learning.paths import get_data_dir
-from ai_agent_learning.qdrant_config import DEFAULT_QDRANT_URL
+from chinese_legal_agent.law_index import INDEX_DIR, tokenize
+from chinese_legal_agent.paths import get_data_dir
+from chinese_legal_agent.qdrant_config import DEFAULT_QDRANT_URL
 
 
 def read_corpus(client):

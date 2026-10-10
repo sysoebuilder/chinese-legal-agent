@@ -1,7 +1,7 @@
 from pathlib import Path
 
 
-def test_learning_repository_has_expected_structure() -> None:
+def test_legal_agent_repository_has_expected_structure() -> None:
     root = Path(__file__).resolve().parents[1]
 
-    assert (root / "src" / "ai_agent_learning").is_dir()
+    assert (root / "src" / "chinese_legal_agent").is_dir()

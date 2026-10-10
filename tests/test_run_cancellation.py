@@ -7,7 +7,7 @@ from langgraph.graph import END, START, MessagesState, StateGraph
 from langgraph.types import interrupt
 from test_run_api import PUBLIC_MODEL, FakeStore, factory_for
 
-from ai_agent_learning.api.worker import execute_run
+from chinese_legal_agent.api.worker import execute_run
 
 
 @pytest.mark.parametrize("cancel_at", ["approval", "running", "cleared"])
@@ -162,8 +162,8 @@ def test_cancelled_subgraph_does_not_resume_old_approval_when_retrying_new_run()
 def test_worker_models_have_separate_clients_closed_in_their_own_event_loop():
     import asyncio
 
-    from ai_agent_learning.api.runtime import open_worker_model
-    from ai_agent_learning.model_config import ModelConfig
+    from chinese_legal_agent.api.runtime import open_worker_model
+    from chinese_legal_agent.model_config import ModelConfig
 
     config = ModelConfig("deepseek", "test", "fake-key", "https://example.com")
     clients = []

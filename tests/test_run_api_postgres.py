@@ -10,9 +10,9 @@ import pytest
 from psycopg import sql
 from psycopg.conninfo import make_conninfo
 
-from ai_agent_learning.api.celery_app import dispatch_pending
-from ai_agent_learning.api.store import PostgresRunStore, RunConflict
-from ai_agent_learning.database import get_database_url, migrate_database
+from chinese_legal_agent.api.celery_app import dispatch_pending
+from chinese_legal_agent.api.store import PostgresRunStore, RunConflict
+from chinese_legal_agent.database import get_database_url, migrate_database
 
 pytestmark = pytest.mark.skipif(
     os.getenv("AGENT_TEST_POSTGRES") != "1", reason="默认测试离线"
@@ -150,7 +150,7 @@ def test_shared_history_reads_api_and_historical_turns_together(store):
     from langgraph.checkpoint.postgres import PostgresSaver
     from langgraph.graph import END, START, MessagesState, StateGraph
 
-    from ai_agent_learning.api.worker import execute_run
+    from chinese_legal_agent.api.worker import execute_run
 
     graph = StateGraph(MessagesState)
     graph.add_node(
@@ -168,7 +168,7 @@ def test_shared_history_reads_api_and_historical_turns_together(store):
 
     @asynccontextmanager
     async def factory(url, model):
-        from ai_agent_learning.langchain_agent.checkpoint import open_checkpointer
+        from chinese_legal_agent.langchain_agent.checkpoint import open_checkpointer
 
         async with open_checkpointer(url) as saver:
             yield graph.compile(checkpointer=saver)
@@ -219,8 +219,8 @@ def test_real_postgres_checkpoint_survives_worker_restart_and_approval(store):
     from langgraph.graph import END, START, MessagesState, StateGraph
     from langgraph.types import interrupt
 
-    from ai_agent_learning.api.worker import execute_run
-    from ai_agent_learning.langchain_agent.checkpoint import open_checkpointer
+    from chinese_legal_agent.api.worker import execute_run
+    from chinese_legal_agent.langchain_agent.checkpoint import open_checkpointer
 
     effects = []
 
@@ -313,7 +313,7 @@ def write_checkpoint(store, row, graph, *, paused=True):
 
 
 def checkpoint_factory(graph):
-    from ai_agent_learning.langchain_agent.checkpoint import open_checkpointer
+    from chinese_legal_agent.langchain_agent.checkpoint import open_checkpointer
 
     @asynccontextmanager
     async def factory(url, model):
@@ -328,7 +328,7 @@ def test_running_checkpoint_reconnect_is_fenced_and_does_not_repeat_finished_nod
 ):
     from langchain_core.messages import HumanMessage
 
-    from ai_agent_learning.api.worker import execute_run
+    from chinese_legal_agent.api.worker import execute_run
 
     calls = []
     graph = recovery_graph(calls)
@@ -349,8 +349,8 @@ def test_running_checkpoint_reconnect_is_fenced_and_does_not_repeat_finished_nod
 
     from fastapi.testclient import TestClient
 
-    from ai_agent_learning.api.app import create_app
-    from ai_agent_learning.api.settings import ApiSettings
+    from chinese_legal_agent.api.app import create_app
+    from chinese_legal_agent.api.settings import ApiSettings
 
     published = []
     app = create_app(
@@ -396,7 +396,7 @@ def test_running_checkpoint_reconnect_is_fenced_and_does_not_repeat_finished_nod
 
 
 def test_reconnect_restores_checkpoint_interrupt_without_approving_it(store):
-    from ai_agent_learning.api.worker import execute_run
+    from chinese_legal_agent.api.worker import execute_run
 
     calls = []
     graph = recovery_graph(calls, approval=True)
@@ -421,7 +421,7 @@ def test_cancelled_checkpoint_allows_retry_of_new_run_without_old_tool_execution
     from langgraph.graph import END, START, MessagesState, StateGraph
     from langgraph.types import interrupt
 
-    from ai_agent_learning.api.worker import execute_run
+    from chinese_legal_agent.api.worker import execute_run
 
     effects = []
 
@@ -500,7 +500,7 @@ def test_upgrade_removes_old_delta_events_but_preserves_run_and_checkpoint(store
     store.begin(row["run_id"], 1)
     write_checkpoint(store, row, graph)
     config = Config()
-    config.set_main_option("script_location", "ai_agent_learning:migrations")
+    config.set_main_option("script_location", "chinese_legal_agent:migrations")
     engine = create_engine(
         "postgresql+psycopg://",
         creator=lambda: psycopg.connect(store.database_url),

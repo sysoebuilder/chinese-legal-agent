@@ -5,9 +5,9 @@ import json
 from fastapi.testclient import TestClient
 from test_run_api import FakePublisher, FakeStore
 
-from ai_agent_learning.api.app import create_app
-from ai_agent_learning.api.settings import ApiSettings
-from ai_agent_learning.config import ConfigStore
+from chinese_legal_agent.api.app import create_app
+from chinese_legal_agent.api.settings import ApiSettings
+from chinese_legal_agent.config import ConfigStore
 
 
 def app_for(tmp_path, token=""):

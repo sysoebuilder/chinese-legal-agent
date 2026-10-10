@@ -9,9 +9,9 @@ from typing import Any
 
 from dotenv import load_dotenv
 
-from ai_agent_learning.langchain_agent.tools.search_laws import handler
-from ai_agent_learning.paths import get_data_dir
-from ai_agent_learning.qdrant_server import QdrantServer
+from chinese_legal_agent.langchain_agent.tools.search_laws import handler
+from chinese_legal_agent.paths import get_data_dir
+from chinese_legal_agent.qdrant_server import QdrantServer
 
 
 def load_cases(path: Path) -> list[dict[str, Any]]:

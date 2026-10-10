@@ -119,7 +119,7 @@ API 和 Worker 使用镜像内的源码，不挂载主机源码。修改 Python 
 
 ```powershell
 docker compose up -d --build --wait api worker
-docker compose exec worker python -c "import torch; from ai_agent_learning.reranker import load_reranker; _, model = load_reranker(); print(torch.cuda.get_device_name(0), next(model.parameters()).device, next(model.parameters()).dtype)"
+docker compose exec worker python -c "import torch; from chinese_legal_agent.reranker import load_reranker; _, model = load_reranker(); print(torch.cuda.get_device_name(0), next(model.parameters()).device, next(model.parameters()).dtype)"
 ```
 
 输出应包含 NVIDIA 显卡名称、`cuda:0` 和 `torch.float16`。API 不执行重排，因此不分配 GPU。
@@ -171,7 +171,7 @@ docker compose stop frontend api
 API 进程每两秒重新投递尚未成功送入 Redis 的任务。若需要 API 停止期间仍发布数据库内的入队意图，可另启 Celery beat：
 
 ```powershell
-docker compose run --rm --no-deps worker celery -A ai_agent_learning.api.celery_app:celery_app beat --loglevel=INFO --schedule=/app/data/celerybeat-schedule
+docker compose run --rm --no-deps worker celery -A chinese_legal_agent.api.celery_app:celery_app beat --loglevel=INFO --schedule=/app/data/celerybeat-schedule
 ```
 
 beat 是入队意图的补偿发布器。已经入队的任务由 Redis/Celery 交付，不依赖 SSE 连接或 API 进程存活。

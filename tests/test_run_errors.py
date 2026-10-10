@@ -3,12 +3,12 @@
 import asyncio
 from contextlib import asynccontextmanager
 
-from ai_agent_learning.api.errors import (
+from chinese_legal_agent.api.errors import (
     WindowsTerminalUnavailable,
     exception_diagnostics,
     public_error,
 )
-from ai_agent_learning.api.worker import run_agent
+from chinese_legal_agent.api.worker import run_agent
 
 
 def test_nested_groups_report_leaf_types_without_upstream_text():

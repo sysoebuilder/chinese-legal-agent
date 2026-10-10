@@ -15,4 +15,4 @@ RUN --mount=type=cache,target=/root/.cache/pip python -m pip install \
     "httpx>=0.28,<1" "huggingface-hub>=1.5,<2"
 COPY src ./src
 
-CMD ["python", "-m", "ai_agent_learning.initialize"]
+CMD ["python", "-m", "chinese_legal_agent.initialize"]

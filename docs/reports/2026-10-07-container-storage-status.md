@@ -39,7 +39,7 @@ Docker 数据盘原生路径为 `E:\DockerDesktopData\local\wsl\disk\docker_data
 - `data/container-storage/`、`data/postgres-db/`、`data/qdrant-server/`、`data/qdrant-memory-transfer-7edb008b/`、`data/redis/`。
 - `data/law-bm25/`、`data/rag/`、`laws/raw/`、`laws/npc-law-vectors.zip` 及其校验文件。
 - `data/snapshots/`、`data/container-bind-migration-20261007-120617/`、两份中断的旧备份目录。
-- `data/postgresql/`、PostgreSQL Windows 安装包、`src/ai_agent_learning/runtime/qdrant.exe`、根目录 `qdrant.yaml`。
+- `data/postgresql/`、PostgreSQL Windows 安装包、`src/chinese_legal_agent/runtime/qdrant.exe`、根目录 `qdrant.yaml`。
 - 旧记忆导出、旧 PostgreSQL dump、恢复报告和主机法规安装状态文件。
 
 逐项原路径、暂存路径和大小见 `data/backups/20261007-143524/cleanup-report.json`。自动删除操作曾被审批拒绝，返回 `blocked by policy`；随后用户自行删除了暂存目录，以及 `Docker-original-from-C-20261007-141100`、`Docker-from-C-20261007-140638` 两份旧数据盘备份。三个目录均已确认不存在，当前 `local\wsl\disk\docker_data.vhdx` 仍存在。

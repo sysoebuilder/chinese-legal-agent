@@ -3,8 +3,8 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
-from ai_agent_learning.memory.store import QdrantMemoryStore
-from ai_agent_learning.memory import (
+from chinese_legal_agent.memory.store import QdrantMemoryStore
+from chinese_legal_agent.memory import (
     MemoryCandidate,
     MemoryDecisionMaker,
     MemoryStatus,

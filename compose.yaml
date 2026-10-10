@@ -70,7 +70,7 @@ services:
   # 后端只提供业务接口和 /docs；前端由独立的 frontend 服务提供。
   api:
     <<: *agent
-    command: [python, -m, ai_agent_learning.api, --host, 0.0.0.0, --port, "8001"]
+    command: [python, -m, chinese_legal_agent.api, --host, 0.0.0.0, --port, "8001"]
     ports:
       - "127.0.0.1:${AGENT_API_PORT:-8001}:8001"
     healthcheck:
@@ -98,10 +98,10 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
-    command: [celery, -A, "ai_agent_learning.api.celery_app:celery_app", worker, --pool=prefork, --concurrency=1, --loglevel=INFO]
+    command: [celery, -A, "chinese_legal_agent.api.celery_app:celery_app", worker, --pool=prefork, --concurrency=1, --loglevel=INFO]
     stop_grace_period: 60s
     healthcheck:
-      test: [CMD-SHELL, "celery -A ai_agent_learning.api.celery_app:celery_app inspect ping --destination celery@$$HOSTNAME --timeout 3"]
+      test: [CMD-SHELL, "celery -A chinese_legal_agent.api.celery_app:celery_app inspect ping --destination celery@$$HOSTNAME --timeout 3"]
       interval: 30s
       timeout: 10s
       retries: 3

@@ -38,10 +38,11 @@ dependencies = [
 ]
 
 [project.scripts]
-chinese-legal-agent-mcp-provider = "ai_agent_learning.mcp_terminal:main"
+chinese-legal-agent-mcp-provider = "chinese_legal_agent.mcp_terminal:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+include = ["chinese_legal_agent*"]
 
 [tool.setuptools]
 include-package-data = false

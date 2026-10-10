@@ -28,7 +28,7 @@ import pyarrow.parquet as pq
 from dotenv import load_dotenv
 from qdrant_client import QdrantClient, models
 
-from ai_agent_learning.qdrant_server import QdrantServer
+from chinese_legal_agent.qdrant_server import QdrantServer
 
 ROOT = Path(__file__).resolve().parents[2]
 DIMENSIONS = {"text": 1024}

@@ -24,12 +24,12 @@
 
 | 文件 | 修改内容 |
 | --- | --- |
-| [checkpoint.py](/E:/ai-agent-100-days-learning/src/ai_agent_learning/langchain_agent/checkpoint.py) | 保留 PostgreSQL saver 和 Windows 线程适配；移除 SQLite checkpoint 探测与回退；简化 `open_checkpointer` 参数 |
-| [logging_config.py](/E:/ai-agent-100-days-learning/src/ai_agent_learning/logging_config.py) | 替换日志数据库驱动，保留后台队列写入，改用 JSONB 保存日志详细内容 |
-| [database.py](/E:/ai-agent-100-days-learning/src/ai_agent_learning/database.py) | 新增连接配置校验、读取配置和 Alembic 程序化升级入口 |
-| [migrations/env.py](/E:/ai-agent-100-days-learning/src/ai_agent_learning/migrations/env.py) | 使用应用传入的 SQLAlchemy 连接执行迁移 |
-| [0001_sessions_logs.py](/E:/ai-agent-100-days-learning/src/ai_agent_learning/migrations/versions/0001_sessions_logs.py) | 新增会话表、日志表和对应索引的初始迁移 |
-| [migrations/__init__.py](/E:/ai-agent-100-days-learning/src/ai_agent_learning/migrations/__init__.py)、[versions/__init__.py](/E:/ai-agent-100-days-learning/src/ai_agent_learning/migrations/versions/__init__.py) | 将迁移目录作为 Python 包，随项目代码提供 |
+| [checkpoint.py](/E:/ai-agent-100-days-learning/src/chinese_legal_agent/langchain_agent/checkpoint.py) | 保留 PostgreSQL saver 和 Windows 线程适配；移除 SQLite checkpoint 探测与回退；简化 `open_checkpointer` 参数 |
+| [logging_config.py](/E:/ai-agent-100-days-learning/src/chinese_legal_agent/logging_config.py) | 替换日志数据库驱动，保留后台队列写入，改用 JSONB 保存日志详细内容 |
+| [database.py](/E:/ai-agent-100-days-learning/src/chinese_legal_agent/database.py) | 新增连接配置校验、读取配置和 Alembic 程序化升级入口 |
+| [migrations/env.py](/E:/ai-agent-100-days-learning/src/chinese_legal_agent/migrations/env.py) | 使用应用传入的 SQLAlchemy 连接执行迁移 |
+| [0001_sessions_logs.py](/E:/ai-agent-100-days-learning/src/chinese_legal_agent/migrations/versions/0001_sessions_logs.py) | 新增会话表、日志表和对应索引的初始迁移 |
+| [migrations/__init__.py](/E:/ai-agent-100-days-learning/src/chinese_legal_agent/migrations/__init__.py)、[versions/__init__.py](/E:/ai-agent-100-days-learning/src/chinese_legal_agent/migrations/versions/__init__.py) | 将迁移目录作为 Python 包，随项目代码提供 |
 | [pyproject.toml](/E:/ai-agent-100-days-learning/pyproject.toml) | 移除 SQLite checkpoint 依赖声明，声明 PostgreSQL、Psycopg、Alembic 和 SQLAlchemy 依赖 |
 | [.env.example](/E:/ai-agent-100-days-learning/.env.example) | 将连接串说明更新为 checkpoint、会话表和日志表共用的数据库 |
 | [README.md](/E:/ai-agent-100-days-learning/README.md) | 更新中英文存储说明、迁移命令、数据库启动方式和 Qdrant 数据位置 |
@@ -257,7 +257,7 @@ Alembic 管理 `sessions` 和 `logs`；LangGraph 表继续由官方 saver 的 `s
 
 ```powershell
 Set-Location 'E:\ai-agent-100-days-learning'
-& 'E:\ai-agent-100-days-learning\.venv\Scripts\python.exe' -m ai_agent_learning.database
+& 'E:\ai-agent-100-days-learning\.venv\Scripts\python.exe' -m chinese_legal_agent.database
 ```
 
 此命令只升级业务表。LangGraph 表在打开 checkpointer 时由 `setup()` 升级。迁移脚本虽提供 `downgrade()`，它会删除业务表；日常运行不需要执行它。

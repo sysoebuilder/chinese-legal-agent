@@ -10,5 +10,5 @@
 **/*.pyc
 **/.env*
 **/*-model.env
-src/ai_agent_learning/runtime/
-src/ai_agent_learning/laws/
+src/chinese_legal_agent/runtime/
+src/chinese_legal_agent/laws/

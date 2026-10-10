@@ -4,8 +4,8 @@ from types import SimpleNamespace
 
 from langchain_core.messages import AIMessage, HumanMessage
 
-from ai_agent_learning.langchain_agent.legal.nodes import LegalNodes
-from ai_agent_learning.langchain_agent.legal.schemas import LegalCaseAnalysisOutput
+from chinese_legal_agent.langchain_agent.legal.nodes import LegalNodes
+from chinese_legal_agent.langchain_agent.legal.schemas import LegalCaseAnalysisOutput
 
 
 def test_classify_receives_optional_previous_ai_message():
