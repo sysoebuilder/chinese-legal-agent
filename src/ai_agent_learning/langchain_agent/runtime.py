@@ -117,7 +117,7 @@ def create_new_chat_agent(
     middleware.append(ToolLoggingMiddleware())
     middleware.append(
         HumanInTheLoopMiddleware(
-            interrupt_on=build_interrupt_on(general_tools),
+            interrupt_on=build_interrupt_on(general_tools, app_config.permissionsconfig),
             description_prefix="工具执行需要确认",
         )
     )

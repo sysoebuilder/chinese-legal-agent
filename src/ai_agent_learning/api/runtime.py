@@ -7,7 +7,12 @@ from contextlib import AsyncExitStack, asynccontextmanager
 import httpx
 
 from ai_agent_learning.api.errors import WindowsTerminalUnavailable
-from ai_agent_learning.config import APPConfig, load_app_config, use_app_config
+from ai_agent_learning.config import (
+    APPConfig,
+    PermissionsConfig,
+    load_app_config,
+    use_app_config,
+)
 from ai_agent_learning.config.plugins import configured_mcp_servers
 from ai_agent_learning.langchain_agent.checkpoint import open_checkpointer
 from ai_agent_learning.langchain_agent.memory import MemoryWorker
@@ -48,6 +53,7 @@ async def open_worker_agent(database_url: str, public_config: dict[str, str]):
         response = await client.get(f"{qdrant_url}/collections")
         response.raise_for_status()
     app_config = load_app_config()
+    app_config.permissionsconfig = resolve_permissions(public_config, app_config)
     config = resolve_model(public_config, app_config)
 
     async with AsyncExitStack() as stack:
@@ -81,3 +87,10 @@ async def open_worker_agent(database_url: str, public_config: dict[str, str]):
             app_config=app_config,
         )
         yield agent
+
+
+def resolve_permissions(public_config: dict[str, str], app_config: APPConfig) -> PermissionsConfig:
+    """新运行和恢复共用提交时的模式；旧队列兼容当前配置。"""
+    if "permission_mode" not in public_config:
+        return app_config.permissionsconfig
+    return PermissionsConfig.model_validate({"mode": public_config["permission_mode"]})

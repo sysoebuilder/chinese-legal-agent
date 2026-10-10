@@ -174,10 +174,16 @@ class SecretsConfig(ConfigModel):
         return os.getenv(name, "").strip()
 
 
+class PermissionsConfig(ConfigModel):
+    # 沿用原来的空审批风险集合；用户可切换到限制模式。
+    mode: Literal["restricted", "unrestricted"] = "unrestricted"
+
+
 class APPConfig(ConfigModel):
     modelconfig: ModelsConfig = Field(default_factory=ModelsConfig)
     mouldesconfig: MouldesConfig = Field(default_factory=MouldesConfig)
     secretsconfig: SecretsConfig = Field(default_factory=SecretsConfig, repr=False)
+    permissionsconfig: PermissionsConfig = Field(default_factory=PermissionsConfig)
 
     def active_model(self):
         from ai_agent_learning.model_config import ModelConfig
@@ -196,6 +202,7 @@ class APPConfig(ConfigModel):
         return {
             "modelconfig": self.modelconfig.model_dump(mode="json"),
             "mouldesconfig": self.mouldesconfig.model_dump(mode="json"),
+            "permissionsconfig": self.permissionsconfig.model_dump(mode="json"),
             "secretsconfig": {
                 "keys": {
                     name: bool(value.get_secret_value().strip())

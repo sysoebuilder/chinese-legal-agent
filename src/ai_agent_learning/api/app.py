@@ -225,6 +225,7 @@ async def history(
 @router.post("/v1/runs", response_model=RunView, status_code=202)
 async def create_run(body: CreateRun, request: Request) -> RunView:
     key_ref = None
+    permission_mode = None
     try:
         if request.app.state.model_loader is not None:
             config = request.app.state.model_loader()
@@ -233,6 +234,7 @@ async def create_run(body: CreateRun, request: Request) -> RunView:
             request.app.state.app_config = app_config
             config = app_config.active_model()
             key_ref = app_config.modelconfig.models[app_config.modelconfig.active].api_key_ref
+            permission_mode = app_config.permissionsconfig.mode
     except (SystemExit, ValueError, OSError):
         raise HTTPException(503, "请先在终端运行 agent100 config 配置模型") from None
     public_config = {
@@ -242,6 +244,9 @@ async def create_run(body: CreateRun, request: Request) -> RunView:
     }
     if key_ref is not None:
         public_config["api_key_ref"] = key_ref
+    if permission_mode is not None:
+        # 暂停后的恢复也使用提交时的审批模式，避免设置变更绕过拒绝决定。
+        public_config["permission_mode"] = permission_mode
     row = await asyncio.to_thread(
         request.app.state.store.create,
         body.message,

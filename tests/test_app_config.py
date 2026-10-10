@@ -41,6 +41,7 @@ def test_load_migrates_legacy_and_separates_keys(tmp_path, monkeypatch):
         "models.json",
         "mouldes.json",
         "secrets.json",
+        "permissions.json",
     }
     assert "active-key" not in (tmp_path / "models.json").read_text()
     assert "active-key" not in repr(config)

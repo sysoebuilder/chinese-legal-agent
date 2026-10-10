@@ -1,4 +1,4 @@
-"""应用配置：模型、插件与凭据分开持久化。"""
+"""应用配置：模型、插件、凭据与权限分开持久化。"""
 
 from .context import get_secret, use_app_config
 from .schema import (
@@ -6,6 +6,7 @@ from .schema import (
     ModelEntry,
     ModelsConfig,
     MouldesConfig,
+    PermissionsConfig,
     PluginConfig,
     SecretsConfig,
 )
@@ -17,6 +18,7 @@ __all__ = [
     "ModelEntry",
     "ModelsConfig",
     "MouldesConfig",
+    "PermissionsConfig",
     "PluginConfig",
     "SecretsConfig",
     "config_dir",

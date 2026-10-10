@@ -12,13 +12,21 @@ from pydantic import SecretStr
 
 from ai_agent_learning.paths import get_data_dir
 
-from .schema import APPConfig, ModelEntry, ModelsConfig, MouldesConfig, SecretsConfig
+from .schema import (
+    APPConfig,
+    ModelEntry,
+    ModelsConfig,
+    MouldesConfig,
+    PermissionsConfig,
+    SecretsConfig,
+)
 
 _lock = threading.RLock()
 SECTIONS = {
     "models": ("modelconfig", ModelsConfig),
     "mouldes": ("mouldesconfig", MouldesConfig),
     "secrets": ("secretsconfig", SecretsConfig),
+    "permissions": ("permissionsconfig", PermissionsConfig),
 }
 
 
@@ -151,7 +159,7 @@ class ConfigStore:
         )
         values = {}
         # 凭据先写入；首次迁移过程中退出时不会遗失已迁移的 Key。
-        for section in ("secrets", "models", "mouldes"):
+        for section in ("secrets", "models", "mouldes", "permissions"):
             field, schema = SECTIONS[section]
             path = self.directory / f"{section}.json"
             if path.exists():
@@ -195,6 +203,15 @@ class ConfigStore:
                         payload["keys"][name] = secret
             else:
                 payload = _merge(value.model_dump(mode="json"), patch)
+                if section == "mouldes" and isinstance(patch.get("plugins"), dict):
+                    # 连接编辑器提交完整映射，允许移除旧请求头和环境变量。
+                    for name, plugin_patch in patch["plugins"].items():
+                        if isinstance(plugin_patch, dict):
+                            for mapping in ("headers", "env"):
+                                if mapping in plugin_patch:
+                                    payload["plugins"][name][mapping] = plugin_patch[
+                                        mapping
+                                    ]
             try:
                 updated = schema.model_validate(payload)
             except ValueError:

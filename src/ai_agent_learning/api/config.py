@@ -6,11 +6,12 @@ from typing import Any, Literal
 from fastapi import APIRouter, HTTPException, Request
 
 router = APIRouter(prefix="/v1/config", tags=["config"])
-Section = Literal["models", "mouldes", "secrets"]
+Section = Literal["models", "mouldes", "secrets", "permissions"]
 FIELDS = {
     "models": "modelconfig",
     "mouldes": "mouldesconfig",
     "secrets": "secretsconfig",
+    "permissions": "permissionsconfig",
 }
 
 

@@ -29,6 +29,7 @@ def test_configuration_roundtrip_and_model_used_for_next_run(tmp_path):
             "modelconfig",
             "mouldesconfig",
             "secretsconfig",
+            "permissionsconfig",
         }
         response = client.patch(
             "/v1/config/secrets", json={"keys": {"CUSTOM_MODEL_KEY": "private-api-key"}}
@@ -110,3 +111,81 @@ def test_invalid_patch_does_not_write_or_echo_secrets(tmp_path):
             == 422
         )
         assert client.get("/v1/config/unknown").status_code == 422
+
+
+def test_plugin_connection_maps_can_remove_values_and_secrets_can_disable_or_delete(
+    tmp_path,
+):
+    app, _ = app_for(tmp_path)
+    with TestClient(app) as client:
+        connection = {
+            "kind": "http",
+            "able": True,
+            "url": "https://example.com/mcp",
+            "headers": {
+                "Authorization": "Bearer ${CUSTOM_TOKEN}",
+                "X-Old": "remove-me",
+            },
+            "read_timeout_seconds": 90,
+            "trust_env": False,
+        }
+        assert (
+            client.patch(
+                "/v1/config/mouldes", json={"plugins": {"custom": connection}}
+            ).status_code
+            == 200
+        )
+        response = client.patch(
+            "/v1/config/mouldes",
+            json={
+                "plugins": {
+                    "custom": {"headers": {"Authorization": "Bearer ${CUSTOM_TOKEN}"}}
+                }
+            },
+        )
+        assert response.status_code == 200
+        custom = response.json()["plugins"]["custom"]
+        assert custom["headers"] == {"Authorization": "Bearer ${CUSTOM_TOKEN}"}
+        assert custom["read_timeout_seconds"] == 90
+        response = client.patch(
+            "/v1/config/mouldes",
+            json={
+                "plugins": {
+                    "custom": {
+                        "kind": "stdio",
+                        "url": None,
+                        "headers": {},
+                        "command": "python",
+                        "args": ["-m", "my_server"],
+                        "cwd": "/app",
+                        "env": {"CUSTOM_TOKEN": "${CUSTOM_TOKEN}", "OLD": "remove-me"},
+                    }
+                }
+            },
+        )
+        assert response.status_code == 200
+        response = client.patch(
+            "/v1/config/mouldes", json={"plugins": {"custom": {"env": {}}}}
+        )
+        assert response.json()["plugins"]["custom"]["env"] == {}
+        assert response.json()["plugins"]["custom"]["headers"] == {}
+        assert (
+            client.patch(
+                "/v1/config/secrets",
+                json={"keys": {"CUSTOM_TOKEN": "test-private-token"}},
+            ).json()["keys"]["CUSTOM_TOKEN"]
+            is True
+        )
+        assert (
+            client.patch(
+                "/v1/config/secrets", json={"keys": {"CUSTOM_TOKEN": ""}}
+            ).json()["keys"]["CUSTOM_TOKEN"]
+            is False
+        )
+        assert (
+            "CUSTOM_TOKEN"
+            not in client.patch(
+                "/v1/config/secrets", json={"keys": {"CUSTOM_TOKEN": None}}
+            ).json()["keys"]
+        )
+        assert "test-private-token" not in client.get("/v1/config").text
