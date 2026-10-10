@@ -41,6 +41,12 @@ let config = {
         kind: "http",
         able: true,
         url: "https://api.githubcopilot.com/mcp/",
+        headers: {
+          Authorization: "Bearer ${GITHUB_PERSONAL_ACCESS_TOKEN}",
+          "X-Old": "remove-me",
+        },
+        read_timeout_seconds: 60,
+        trust_env: true,
       },
       cloudflare_docs: {
         kind: "http",
@@ -51,12 +57,15 @@ let config = {
     },
   },
   secretsconfig: { keys: { ZAI_API_KEY: true, DEEPSEEK_API_KEY: true } },
+  permissionsconfig: { mode: "unrestricted" },
 };
 const writes = [],
   errors = [];
 let requireToken = false,
+  failSecrets = false,
   failPlugins = false,
   failModels = false,
+  failPermissions = false,
   configUnavailable = false;
 const session = {
   thread_id: "10000000-0000-4000-8000-000000000001",
@@ -126,8 +135,11 @@ const session = {
         writes.push({ section, body });
         await new Promise((resolve) => setTimeout(resolve, 120));
         if (section === "secrets") {
-          for (const [key, value] of Object.entries(body.keys))
-            config.secretsconfig.keys[key] = !!value;
+          if (failSecrets) return send({ detail: "凭据保存失败" }, 503);
+          for (const [key, value] of Object.entries(body.keys)) {
+            if (value === null) delete config.secretsconfig.keys[key];
+            else config.secretsconfig.keys[key] = !!value;
+          }
           return send(config.secretsconfig);
         }
         if (section === "models") {
@@ -140,8 +152,16 @@ const session = {
           if (failPlugins) return send({ detail: "插件设置保存失败" }, 503);
           if (body.legal) config.mouldesconfig.legal = body.legal;
           for (const [id, patch] of Object.entries(body.plugins || {}))
-            Object.assign(config.mouldesconfig.plugins[id], patch);
+            config.mouldesconfig.plugins[id] = {
+              ...config.mouldesconfig.plugins[id],
+              ...patch,
+            };
           return send(config.mouldesconfig);
+        }
+        if (section === "permissions") {
+          if (failPermissions) return send({ detail: "权限保存失败" }, 503);
+          config.permissionsconfig = body;
+          return send(config.permissionsconfig);
         }
       }
       return send({ detail: "不存在" }, 404);
@@ -177,9 +197,9 @@ const session = {
             .textContent.includes("保存中"),
       );
     }
-    const switcher = page.getByRole("combobox", { name: "切换模型" });
+    const switcher = page.getByRole("button", { name: "切换模型" });
     await switcher.waitFor();
-    assert.equal(await switcher.inputValue(), "glm");
+    assert.ok((await switcher.textContent()).includes(config.modelconfig.models.glm.model));
     await page.screenshot({
       path: path.join(output, "config-desktop-chat.png"),
     });
@@ -189,7 +209,8 @@ const session = {
       () =>
         document.querySelector("#chat-title")?.textContent === "一个已有对话",
     );
-    await switcher.selectOption("deepseek");
+    await switcher.click();
+    await page.getByRole("option", { name: "deepseek-flash", exact: true }).click();
     await page
       .getByText("模型已切换，下一次发送时使用。", { exact: true })
       .waitFor();
@@ -334,6 +355,207 @@ const session = {
     await page
       .getByText("插件选择已保存，后续运行生效。", { exact: true })
       .waitFor();
+
+    async function saveConnection() {
+      const response = page.waitForResponse(
+        (item) =>
+          item.url().endsWith("/v1/config/mouldes") &&
+          item.request().method() === "PATCH",
+      );
+      await page.getByRole("button", { name: "保存连接", exact: true }).click();
+      await response;
+      await page.waitForFunction(
+        () =>
+          !document
+            .querySelector('.plugin-connection-form button[type="submit"]')
+            ?.textContent.includes("保存中"),
+      );
+    }
+    async function changeSecret(name, button) {
+      const response = page.waitForResponse(
+        (item) =>
+          item.url().endsWith("/v1/config/secrets") &&
+          item.request().method() === "PATCH",
+      );
+      await page
+        .getByRole("button", { name: `${button} ${name}`, exact: true })
+        .click();
+      await response;
+      await page.waitForFunction(
+        () => !document.querySelector("#new-secret-name")?.disabled,
+      );
+    }
+    // HTTP 连接全部字段可编辑，移除请求头能够落到实际保存值。
+    await page.getByRole("button", { name: "配置GitHub", exact: true }).click();
+    await page
+      .getByLabel("MCP 服务地址", { exact: true })
+      .fill("https://github.example/mcp");
+    await page.getByLabel("读取超时（秒）", { exact: true }).fill("120");
+    await page
+      .getByRole("switch", { name: "继承系统代理", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "移除请求头 2", exact: true })
+      .click();
+    await saveConnection();
+    assert.deepEqual(config.mouldesconfig.plugins.github.headers, {
+      Authorization: "Bearer ${GITHUB_PERSONAL_ACCESS_TOKEN}",
+    });
+    assert.equal(
+      config.mouldesconfig.plugins.github.url,
+      "https://github.example/mcp",
+    );
+    assert.equal(config.mouldesconfig.plugins.github.read_timeout_seconds, 120);
+    assert.equal(config.mouldesconfig.plugins.github.trust_env, false);
+    // 保存失败保留草稿，切换设置标签也不会清空。
+    await page.getByRole("button", { name: "配置GitHub", exact: true }).click();
+    await page
+      .getByLabel("MCP 服务地址", { exact: true })
+      .fill("https://retry.example/mcp");
+    await page.getByRole("tab", { name: "模型", exact: true }).click();
+    await page.getByRole("tab", { name: "插件", exact: true }).click();
+    failPlugins = true;
+    await saveConnection();
+    assert.equal(
+      await page.getByLabel("MCP 服务地址", { exact: true }).inputValue(),
+      "https://retry.example/mcp",
+    );
+    assert.equal(
+      config.mouldesconfig.plugins.github.url,
+      "https://github.example/mcp",
+    );
+    failPlugins = false;
+    await saveConnection();
+
+    // 新建 stdio 连接：参数、工作目录、环境变量引用与校验。
+    await page
+      .getByRole("button", { name: "添加 MCP 插件", exact: true })
+      .click();
+    await page.getByLabel("插件名称", { exact: true }).fill("github");
+    await page.getByRole("button", { name: "保存连接", exact: true }).click();
+    await page
+      .getByText("这个插件名称已存在，请换一个。", { exact: true })
+      .waitFor();
+    await page.getByLabel("插件名称", { exact: true }).fill("demo_process");
+    await page.getByLabel("连接方式", { exact: true }).selectOption("stdio");
+    await page.getByLabel("启动命令", { exact: true }).fill("python");
+    await page.getByLabel("启动参数", { exact: true }).fill("[1]");
+    await page.getByRole("button", { name: "保存连接", exact: true }).click();
+    await page
+      .getByText("启动参数中的每一项都必须是字符串。", { exact: true })
+      .waitFor();
+    await page
+      .getByLabel("启动参数", { exact: true })
+      .fill('["-m", "demo_server"]');
+    await page.getByLabel("工作目录", { exact: true }).fill("/app/tools");
+    await page
+      .getByRole("button", { name: "添加环境变量", exact: true })
+      .click();
+    await page.getByLabel("环境变量名称 1", { exact: true }).fill("TOKEN");
+    await page
+      .getByLabel("环境变量值 1", { exact: true })
+      .fill("${CUSTOM_PLUGIN_TOKEN}");
+    await page.getByRole("switch", { name: "启用此连接", exact: true }).click();
+    await saveConnection();
+    const stdio = config.mouldesconfig.plugins.demo_process;
+    assert.equal(stdio.kind, "stdio");
+    assert.deepEqual(stdio.args, ["-m", "demo_server"]);
+    assert.equal(stdio.cwd, "/app/tools");
+    assert.deepEqual(stdio.env, { TOKEN: "${CUSTOM_PLUGIN_TOKEN}" });
+    assert.equal(
+      await page
+        .getByRole("switch", { name: "启用demo_process", exact: true })
+        .getAttribute("aria-checked"),
+      "true",
+    );
+
+    // 所有凭据都通过 secrets 接口保存，失败时保留输入，成功后清空。
+    await page
+      .getByRole("button", { name: "设置 CUSTOM_PLUGIN_TOKEN", exact: true })
+      .click();
+    await page
+      .getByLabel("更新 CUSTOM_PLUGIN_TOKEN", { exact: true })
+      .fill("plugin-dummy-secret");
+    failSecrets = true;
+    await changeSecret("CUSTOM_PLUGIN_TOKEN", "保存凭据");
+    assert.equal(
+      await page
+        .getByLabel("更新 CUSTOM_PLUGIN_TOKEN", { exact: true })
+        .inputValue(),
+      "plugin-dummy-secret",
+    );
+    assert.equal(config.secretsconfig.keys.CUSTOM_PLUGIN_TOKEN, undefined);
+    failSecrets = false;
+    await changeSecret("CUSTOM_PLUGIN_TOKEN", "保存凭据");
+    assert.equal(
+      await page
+        .getByLabel("更新 CUSTOM_PLUGIN_TOKEN", { exact: true })
+        .inputValue(),
+      "",
+    );
+    assert.deepEqual(writes.at(-1), {
+      section: "secrets",
+      body: { keys: { CUSTOM_PLUGIN_TOKEN: "plugin-dummy-secret" } },
+    });
+    await changeSecret("CUSTOM_PLUGIN_TOKEN", "停用凭据");
+    assert.equal(config.secretsconfig.keys.CUSTOM_PLUGIN_TOKEN, false);
+    assert.equal(writes.at(-1).body.keys.CUSTOM_PLUGIN_TOKEN, "");
+    await changeSecret("CUSTOM_PLUGIN_TOKEN", "删除保存值");
+    assert.equal(config.secretsconfig.keys.CUSTOM_PLUGIN_TOKEN, undefined);
+    assert.equal(writes.at(-1).body.keys.CUSTOM_PLUGIN_TOKEN, null);
+    await page
+      .getByLabel("更新 CUSTOM_PLUGIN_TOKEN", { exact: true })
+      .scrollIntoViewIfNeeded();
+    await page.screenshot({
+      path: path.join(output, "config-desktop-secrets.png"),
+    });
+    await page.getByLabel("凭据名称", { exact: true }).fill("INVALID-NAME");
+    await page.getByLabel("凭据值", { exact: true }).fill("added-dummy-secret");
+    await page.getByRole("button", { name: "添加凭据", exact: true }).click();
+    await page
+      .getByText(
+        "凭据名称必须以字母或下划线开头，只能包含字母、数字、下划线。",
+        { exact: true },
+      )
+      .waitFor();
+    await page
+      .getByLabel("凭据名称", { exact: true })
+      .fill("EXTRA_PLUGIN_TOKEN");
+    const added = page.waitForResponse(
+      (item) =>
+        item.url().endsWith("/v1/config/secrets") &&
+        item.request().method() === "PATCH",
+    );
+    await page.getByRole("button", { name: "添加凭据", exact: true }).click();
+    await added;
+    await page.waitForFunction(
+      () => document.querySelector("#new-secret-value").value === "",
+    );
+    assert.equal(config.secretsconfig.keys.EXTRA_PLUGIN_TOKEN, true);
+    assert.equal(
+      await page.evaluate(
+        () =>
+          JSON.stringify({ ...localStorage, ...sessionStorage }).includes(
+            "plugin-dummy-secret",
+          ) ||
+          JSON.stringify({ ...localStorage, ...sessionStorage }).includes(
+            "added-dummy-secret",
+          ),
+      ),
+      false,
+    );
+    // 连接类型切换会清空失效的 stdio 参数。
+    await page
+      .getByRole("button", { name: "配置demo_process", exact: true })
+      .click();
+    await page.getByLabel("连接方式", { exact: true }).selectOption("http");
+    await page
+      .getByLabel("MCP 服务地址", { exact: true })
+      .fill("https://demo.example/mcp");
+    await saveConnection();
+    assert.deepEqual(config.mouldesconfig.plugins.demo_process.env, {});
+    assert.deepEqual(config.mouldesconfig.plugins.demo_process.args, []);
+    assert.equal(config.mouldesconfig.plugins.demo_process.command, null);
     await page.keyboard.press("Escape");
     await page.waitForFunction(
       () => !document.getElementById("settings-dialog"),
@@ -361,6 +583,65 @@ const session = {
         .getAttribute("aria-checked"),
       "false",
     );
+
+    // 权限只有两档；保存失败保留草稿，刷新后仍显示已保存设置。
+    await page.getByRole("tab", { name: "权限", exact: true }).click();
+    const restricted = page.getByRole("radio", { name: "限制", exact: true });
+    const unrestricted = page.getByRole("radio", {
+      name: "无限制",
+      exact: true,
+    });
+    assert.equal(await page.locator(".permission-options input").count(), 2);
+    assert.ok(await unrestricted.isChecked());
+    const savePermissionsButton = page.getByRole("button", {
+      name: "保存权限",
+      exact: true,
+    });
+    assert.ok(await savePermissionsButton.isDisabled());
+    async function savePermissions() {
+      const response = page.waitForResponse(
+        (item) =>
+          item.url().endsWith("/v1/config/permissions") &&
+          item.request().method() === "PATCH",
+      );
+      await savePermissionsButton.click();
+      await response;
+      await page.waitForFunction(
+        () =>
+          !document
+            .querySelector('.permissions-settings button[type="submit"]')
+            .textContent.includes("保存中"),
+      );
+    }
+    await restricted.check();
+    await page.getByRole("tab", { name: "模型", exact: true }).click();
+    await page.getByRole("tab", { name: "权限", exact: true }).click();
+    assert.ok(await restricted.isChecked());
+    failPermissions = true;
+    await savePermissions();
+    await page.getByRole("alert").filter({ hasText: "权限保存失败" }).waitFor();
+    assert.ok(await restricted.isChecked());
+    assert.equal(config.permissionsconfig.mode, "unrestricted");
+    failPermissions = false;
+    await savePermissions();
+    assert.deepEqual(writes.at(-1), {
+      section: "permissions",
+      body: { mode: "restricted" },
+    });
+    assert.ok(await savePermissionsButton.isDisabled());
+    await page.screenshot({
+      path: path.join(output, "config-desktop-permissions.png"),
+    });
+    await page.reload();
+    await page.getByRole("button", { name: "打开设置", exact: true }).click();
+    await page.getByRole("tab", { name: "权限", exact: true }).click();
+    assert.ok(await restricted.isChecked());
+    await unrestricted.check();
+    await savePermissions();
+    assert.equal(config.permissionsconfig.mode, "unrestricted");
+    await page
+      .getByText("Agent 权限已保存，后续运行生效。", { exact: true })
+      .waitFor();
 
     // 连接失败保留表单；成功后展示最新配置。
     await page.getByRole("tab", { name: "连接", exact: true }).click();
@@ -396,6 +677,11 @@ const session = {
     await page.screenshot({
       path: path.join(output, "config-dark-models.png"),
     });
+    await page.getByRole("tab", { name: "权限", exact: true }).click();
+    await page.waitForTimeout(300);
+    await page.screenshot({
+      path: path.join(output, "config-dark-permissions.png"),
+    });
     await page.getByRole("button", { name: "关闭设置", exact: true }).click();
     await page.waitForFunction(
       () => !document.getElementById("settings-dialog"),
@@ -424,6 +710,13 @@ const session = {
     await page.screenshot({
       path: path.join(output, "config-mobile-plugins.png"),
     });
+    await page.getByRole("button", { name: "配置GitHub", exact: true }).click();
+    await page
+      .getByLabel("MCP 服务地址", { exact: true })
+      .scrollIntoViewIfNeeded();
+    await page.screenshot({
+      path: path.join(output, "config-mobile-plugin-editor.png"),
+    });
     await page.setViewportSize({ width: 320, height: 640 });
     assert.ok(
       await page.evaluate(
@@ -433,6 +726,28 @@ const session = {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.getByRole("tab", { name: "插件", exact: true }).focus();
+    await page.keyboard.press("ArrowRight");
+    assert.equal(
+      await page
+        .getByRole("tab", { name: "权限", exact: true })
+        .getAttribute("aria-selected"),
+      "true",
+    );
+    await page.waitForTimeout(300);
+    await page.screenshot({
+      path: path.join(output, "config-mobile-permissions.png"),
+    });
+    assert.ok(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    );
+    await page.setViewportSize({ width: 320, height: 640 });
+    assert.ok(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    );
     await page.keyboard.press("ArrowRight");
     assert.equal(
       await page
@@ -453,7 +768,7 @@ const session = {
     await page.getByLabel("模型名称", { exact: true }).waitFor();
     assert.deepEqual(errors, []);
     console.log(
-      "Config browser checks passed: model switching without chat reset, editing and adding models, secret write-only handling, preserved drafts, partial save/retry, plugin and legal toggles, persistence, auth, dark/mobile layouts, keyboard and reduced motion, load recovery.",
+      "Config browser checks passed: models, plugins, secrets, permissions roundtrip and retry, persistence, auth, dark/mobile layouts, keyboard and load recovery.",
     );
   } finally {
     await browser.close();

@@ -38,7 +38,7 @@ function answerFrames() {
       const send = (body,status=200) => route.fulfill({ status,contentType:'application/json',body:JSON.stringify(body) });
       if (requireToken && request.headers().authorization !== 'Bearer browser-test-token') return send({ detail:'需要有效的 Bearer token' },401);
       if (requireToken) authObserved = true;
-      if (pathname === '/v1/config') return send({ modelconfig:{ active:'glm',models:{ glm:{ provider:'glm',model:'测试模型',base_url:'https://model.example',api_key_ref:'ZAI_API_KEY' } } },mouldesconfig:{ legal:{ able:true },plugins:{} },secretsconfig:{ keys:{ ZAI_API_KEY:true } } });
+      if (pathname === '/v1/config') return send({ modelconfig:{ active:'glm',models:{ glm:{ provider:'glm',model:'测试模型',base_url:'https://model.example',api_key_ref:'ZAI_API_KEY' } } },mouldesconfig:{ legal:{ able:true },plugins:{} },secretsconfig:{ keys:{ ZAI_API_KEY:true } },permissionsconfig:{ mode:'unrestricted' } });
       if (pathname === '/v1/sessions') return send({ sessions,has_more:false,next_offset:null });
       if (pathname.endsWith('/recovery')) {
         recoveryCalls++;
@@ -123,11 +123,10 @@ function answerFrames() {
 
     mode='approval'; await page.getByRole('textbox',{ name:'发送消息',exact:true }).fill('请发送测试邮件'); await page.getByRole('button',{ name:'发送消息',exact:true }).click();
     await page.getByText('请确认接下来的操作',{ exact:true }).waitFor();
-    assert.equal(await page.locator('.interrupt-form select').inputValue(),'');
+    assert.equal(await page.getByRole('button',{ name:'同意',exact:true }).getAttribute('aria-pressed'),'false');
     await page.getByRole('button',{ name:'理解 Agent 的调用链',exact:true }).click();
     await page.getByRole('button',{ name:'帮我梳理一下 SSE 的工作方式',exact:true }).click();
-    await page.locator('.interrupt-form select').waitFor();
-    await page.locator('.interrupt-form select').selectOption('reject'); await page.getByRole('button',{ name:'提交并继续' }).click();
+    await page.getByRole('button',{ name:'拒绝',exact:true }).click();
     await page.waitForFunction(() => document.querySelector('#messages').textContent.includes('已收到补充信息'));
     assert.ok(resumed);
 
@@ -136,7 +135,7 @@ function answerFrames() {
     await page.waitForFunction(() => document.querySelectorAll('#messages .message').length===6);
 
     mode='approval'; await page.getByRole('textbox',{ name:'发送消息',exact:true }).fill('停止测试'); await page.getByRole('button',{ name:'发送消息',exact:true }).click();
-    await page.locator('.interrupt-form select').waitFor(); await page.getByRole('button',{ name:'停止生成',exact:true }).click();
+    await page.getByRole('button',{ name:'同意',exact:true }).waitFor(); await page.getByRole('button',{ name:'停止生成',exact:true }).click();
     await page.waitForFunction(() => document.getElementById('run-status').textContent.includes('已停止')); assert.ok(cancelled);
     await page.locator('#new-chat').click();
     mode='reconnect'; await page.getByRole('textbox',{ name:'发送消息',exact:true }).fill('测试事件流重新连接'); await page.getByRole('button',{ name:'发送消息',exact:true }).click();

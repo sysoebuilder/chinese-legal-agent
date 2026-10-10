@@ -4,6 +4,7 @@ import type {
   ModelsPatch,
   MouldesConfig,
   MouldesPatch,
+  PermissionsConfig,
   SecretsConfig,
   StreamEvent,
 } from "./types";
@@ -68,6 +69,8 @@ export const patchMouldes = (body: MouldesPatch) =>
   patch<MouldesConfig>("mouldes", body);
 export const patchSecrets = (keys: Record<string, string | null>) =>
   patch<SecretsConfig>("secrets", { keys });
+export const patchPermissions = (body: PermissionsConfig) =>
+  patch<PermissionsConfig>("permissions", body);
 
 // 网络分块不是事件边界，等待完整 SSE 帧后才解析。
 export function createEventParser(onEvent: (event: StreamEvent) => void) {

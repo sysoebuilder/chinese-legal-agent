@@ -5,8 +5,14 @@ import {
   patchModels,
   patchMouldes,
   patchSecrets,
+  patchPermissions,
 } from "./api";
-import type { AppConfig, ModelEntry, MouldesPatch } from "./types";
+import type {
+  AppConfig,
+  ModelEntry,
+  MouldesPatch,
+  PermissionsConfig,
+} from "./types";
 
 export function useAppConfig() {
   const [config, setConfig] = useState<AppConfig | null>(null);
@@ -128,14 +134,41 @@ export function useAppConfig() {
     });
   }
 
-  async function savePlugins(patch: MouldesPatch) {
+  async function savePlugins(
+    patch: MouldesPatch,
+    notice = "插件选择已保存，后续运行生效。",
+  ) {
     return mutate("plugins", async () => {
       const next = await patchMouldes(patch);
       if (mounted.current) {
         setConfig(
           (previous) => previous && { ...previous, mouldesconfig: next },
         );
-        setNotice("插件选择已保存，后续运行生效。");
+        setNotice(notice);
+      }
+    });
+  }
+
+  async function saveSecrets(keys: Record<string, string | null>) {
+    return mutate("secrets", async () => {
+      const next = await patchSecrets(keys);
+      if (mounted.current) {
+        setConfig(
+          (previous) => previous && { ...previous, secretsconfig: next },
+        );
+        setNotice("凭据已保存，后续运行生效。");
+      }
+    });
+  }
+
+  async function savePermissions(mode: PermissionsConfig["mode"]) {
+    return mutate("permissions", async () => {
+      const next = await patchPermissions({ mode });
+      if (mounted.current) {
+        setConfig(
+          (previous) => previous && { ...previous, permissionsconfig: next },
+        );
+        setNotice("Agent 权限已保存，后续运行生效。");
       }
     });
   }
@@ -165,6 +198,8 @@ export function useAppConfig() {
     selectModel,
     saveModel,
     savePlugins,
+    saveSecrets,
+    savePermissions,
     dismissError: () => setError(""),
   };
 }

@@ -17,3 +17,4 @@ export { default as IconCpu } from "@tabler/icons-react/dist/esm/icons/IconCpu.m
 export { default as IconPlug } from "@tabler/icons-react/dist/esm/icons/IconPlug.mjs";
 export { default as IconScale } from "@tabler/icons-react/dist/esm/icons/IconScale.mjs";
 export { default as IconKey } from "@tabler/icons-react/dist/esm/icons/IconKey.mjs";
+export { default as IconShield } from "@tabler/icons-react/dist/esm/icons/IconShield.mjs";

@@ -20,7 +20,7 @@ export const statusText = {
   waiting_input: "需要你补充信息",
   succeeded: "回答完成",
   failed: "本轮执行失败，可重试或停止",
-  cancelled: "已停止，可开启新对话",
+  cancelled: "已停止，可继续发送消息",
 };
 interface ChatState {
   thread: string | null;

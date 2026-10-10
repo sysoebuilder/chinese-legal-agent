@@ -111,10 +111,14 @@ export interface MouldesConfig {
 export interface SecretsConfig {
   keys: Record<string, boolean>;
 }
+export interface PermissionsConfig {
+  mode: "restricted" | "unrestricted";
+}
 export interface AppConfig {
   modelconfig: ModelsConfig;
   mouldesconfig: MouldesConfig;
   secretsconfig: SecretsConfig;
+  permissionsconfig: PermissionsConfig;
 }
 export interface ModelsPatch {
   active?: string;
@@ -122,5 +126,5 @@ export interface ModelsPatch {
 }
 export interface MouldesPatch {
   legal?: { able: boolean };
-  plugins?: Record<string, { able: boolean }>;
+  plugins?: Record<string, Partial<PluginConfig>>;
 }

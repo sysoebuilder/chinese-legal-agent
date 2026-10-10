@@ -614,8 +614,7 @@ kbd {
   font-size: 12px;
   line-height: 1.8;
 }
-.interrupt-form textarea,
-.interrupt-form select {
+.interrupt-form textarea {
   width: 100%;
   background: var(--surface);
   border: 1px solid var(--line);
@@ -635,6 +634,39 @@ kbd {
 }
 .interrupt-form .primary-button {
   margin-top: 18px;
+}
+.approval-hint {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.approval-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 12px 0 4px;
+}
+.approval-decision {
+  min-width: 82px;
+  padding: 9px 20px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+}
+.approval-decision:hover:not(:disabled) {
+  border-color: var(--muted);
+}
+.approval-agree {
+  background: var(--text);
+  border-color: var(--text);
+  color: var(--page);
+}
+.approval-decision[aria-pressed="true"] {
+  background: var(--blue-soft);
+  border-color: var(--blue);
+  color: var(--blue);
 }
 .composer-dock {
   position: absolute;
@@ -1147,6 +1179,57 @@ kbd {
   font-size: 10px;
   line-height: 1.8;
 }
+.app-settings .permission-options {
+  display: grid;
+  gap: 12px;
+  border: 0;
+  padding: 0;
+  margin: 24px 0 16px;
+  min-width: 0;
+}
+.app-settings .permission-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  cursor: pointer;
+  margin: 0;
+  font-weight: 400;
+}
+.permission-option:has(input:checked) {
+  border-color: var(--blue);
+  background: var(--side);
+}
+.permission-option:focus-within {
+  outline: 2px solid var(--blue);
+  outline-offset: 3px;
+}
+.app-settings .permission-option input {
+  margin: 3px 0 0;
+  width: 15px;
+  height: 15px;
+  accent-color: var(--blue);
+  flex-shrink: 0;
+  padding: 0;
+}
+.permission-options:disabled .permission-option {
+  cursor: default;
+  opacity: 0.6;
+}
+.permission-option-title {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+}
+.permission-option-description {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.8;
+}
 .legal-setting {
   display: flex;
   align-items: center;
@@ -1243,32 +1326,178 @@ kbd {
   position: relative;
   max-width: 210px;
 }
-.model-switcher select {
+.model-switcher-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   width: 100%;
   max-width: 210px;
-  appearance: none;
-  padding: 8px 26px 8px 10px;
+  padding: 8px 10px;
   font-size: 11px;
   color: var(--muted);
   background: none;
   border: 1px solid transparent;
   border-radius: 8px;
   cursor: pointer;
-  text-overflow: ellipsis;
 }
-.model-switcher select:hover:not(:disabled) {
+.model-switcher-trigger > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.model-switcher-trigger:hover:not(:disabled),
+.model-switcher-trigger[aria-expanded="true"] {
   color: var(--text);
   background: var(--side);
 }
-.model-switcher select:disabled {
+.model-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 10;
+  width: min(260px, calc(100vw - 32px));
+  max-height: min(320px, 60dvh);
+  overflow-y: auto;
+  padding: 5px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+.model-menu > button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 7px;
+  font-size: 12px;
+  text-align: left;
+  white-space: normal;
+}
+.model-menu > button > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.model-menu > button:hover:not(:disabled),
+.model-menu > button:focus-visible {
+  background: var(--soft);
+  outline-offset: -2px;
+}
+.model-menu > button[aria-selected="true"] {
+  color: var(--blue);
+  background: var(--blue-soft);
+}
+.model-menu .tabler-icon {
+  width: 14px;
+  height: 14px;
+}
+.plugin-connection-form,
+.secrets-settings {
+  margin-top: 26px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+}
+.plugin-settings-panel .add-plugin {
+  margin-top: 16px;
+}
+.plugin-settings-panel .setting-row-copy {
+  min-width: 0;
+}
+.plugin-configure {
+  flex-shrink: 0;
+  font-size: 11px;
+}
+.plugin-connection-form textarea,
+.plugin-connection-form select {
+  width: 100%;
+  padding: 12px;
+  color: var(--text);
+  background: var(--page);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  font: inherit;
+}
+.plugin-connection-form textarea {
+  resize: vertical;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.plugin-connection-form > .field-hint {
+  margin: 12px 0 20px;
+}
+.connection-map {
+  margin: 20px 0 10px;
+  padding: 0;
+  min-width: 0;
+  border: 0;
+}
+.connection-map legend {
+  margin-bottom: 10px;
+  font-size: 12px;
+  font-weight: 550;
+}
+.connection-map-row {
+  display: grid;
+  grid-template-columns: minmax(90px, 1fr) minmax(0, 2fr) auto;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.connection-map-row input {
+  min-width: 0;
+}
+.secret-row {
+  border-bottom: 1px solid var(--line);
+}
+.secret-row h3 {
+  overflow-wrap: anywhere;
+  font-size: 11px;
+}
+.secret-row .setting-row > .text-button {
+  flex-shrink: 0;
+  max-width: 42%;
+  overflow-wrap: anywhere;
+  text-align: right;
+  font-size: 10px;
+}
+.secret-edit {
+  padding: 0 0 20px;
+}
+.secret-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+.secret-actions button {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+}
+.secret-add-form {
+  margin-top: 24px;
+}
+.secret-add-form h3 {
+  font-size: 13px;
+}
+@media (max-width: 600px) {
+  .connection-map-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .connection-map-row input:first-child {
+    grid-column: 1 / -1;
+  }
+}
+.model-switcher-trigger:disabled {
   cursor: default;
   opacity: 0.6;
 }
-.model-switcher > .tabler-icon {
+.model-switcher-trigger > .tabler-icon {
   width: 12px;
   height: 12px;
-  position: absolute;
-  right: 8px;
   pointer-events: none;
   color: var(--muted);
 }
@@ -1326,6 +1555,9 @@ kbd {
   .settings-tabs {
     margin: 0 20px;
   }
+  .settings-tabs > button {
+    padding: 10px 8px;
+  }
   .settings-scroll {
     padding: 22px 20px;
     max-height: calc(100dvh - 210px);
@@ -1366,7 +1598,7 @@ kbd {
     display: none;
   }
   .model-switcher,
-  .model-switcher select {
+  .model-switcher-trigger {
     max-width: min(130px, 29vw);
   }
   .model-settings-button {
@@ -1383,7 +1615,7 @@ kbd {
   .model-config-item,
   .add-model,
   .setting-toggle,
-  .model-switcher select {
+  .model-switcher-trigger {
     transition:
       background-color 0.2s var(--ease),
       color 0.2s var(--ease);

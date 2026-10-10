@@ -18,7 +18,7 @@ import { SettingsDialog, type SettingsTab } from "./components/SettingsDialog";
 import { ModelSwitcher } from "./components/ModelSwitcher";
 import { useAppConfig } from "./useAppConfig";
 import { DeleteDialog } from "./components/DeleteDialog";
-import { statusText, useChat } from "./useChat";
+import { statusText, terminal, useChat } from "./useChat";
 import type { Session } from "./types";
 
 function Skeletons() {
@@ -55,6 +55,8 @@ export function App() {
   const scrollArea = useRef<HTMLDivElement>(null);
   const followBottom = useRef(true);
   const busy = chat.sending || !!chat.deletingThread;
+  const stopping =
+    !!chat.run?.cancel_requested && !terminal.has(chat.run.status);
   const empty =
     !chat.thread && !chat.loading && !chat.messages.length && !chat.live;
   const disabled =
@@ -65,13 +67,15 @@ export function App() {
     ? "正在删除会话…"
     : chat.sending
       ? "正在提交…"
-      : chat.run?.cancel_requested
+      : stopping
         ? "正在停止…"
-        : chat.canReconnect
-          ? "执行已中断"
-          : chat.run
-            ? statusText[chat.run.status]
-            : "";
+        : chat.run?.status === "cancelled"
+          ? statusText.cancelled
+          : chat.canReconnect
+            ? "执行已中断"
+            : chat.run
+              ? statusText[chat.run.status]
+              : "";
   const title =
     chat.sessions.find((session) => session.thread_id === chat.thread)?.name ||
     (chat.thread ? "对话" : "新对话");
@@ -392,23 +396,29 @@ export function App() {
                       role="status"
                     >
                       <span className="status-dot" aria-hidden="true" />
-                      {chat.run.cancel_requested
+                      {stopping
                         ? "正在停止…"
-                        : chat.canReconnect
-                          ? "执行已中断"
-                          : chat.live.status ||
-                            (chat.run.status === "failed"
-                              ? `执行失败：${chat.run.error || "请稍后重试"}`
-                              : statusText[chat.run.status])}
+                        : chat.run.status === "cancelled"
+                          ? statusText.cancelled
+                          : chat.canReconnect
+                            ? "执行已中断"
+                            : chat.live.status ||
+                              (chat.run.status === "failed"
+                                ? `执行失败：${chat.run.error || "请稍后重试"}`
+                                : statusText[chat.run.status])}
                     </p>
-                    {!!chat.run.interrupts.length && (
-                      <InterruptForm
-                        key={`${chat.run.run_id}:${chat.run.status}`}
-                        run={chat.run}
-                        busy={busy}
-                        onSubmit={chat.resume}
-                      />
-                    )}
+                    {!stopping &&
+                      ["waiting_input", "waiting_approval"].includes(
+                        chat.run.status,
+                      ) &&
+                      !!chat.run.interrupts.length && (
+                        <InterruptForm
+                          key={`${chat.run.run_id}:${chat.run.status}`}
+                          run={chat.run}
+                          busy={busy}
+                          onSubmit={chat.resume}
+                        />
+                      )}
                     {chat.canReconnect ? (
                       <button
                         className="primary-button"

@@ -1,16 +1,25 @@
 import { useEffect, useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { IconCpu, IconKey, IconPlug, IconCheck, IconX } from "../icons";
+import {
+  IconCpu,
+  IconKey,
+  IconPlug,
+  IconShield,
+  IconCheck,
+  IconX,
+} from "../icons";
 import { spring, reveal } from "../motion";
 import type { AppConfigController } from "../useAppConfig";
 import { ModelSettings } from "./ModelSettings";
 import { PluginSettings } from "./PluginSettings";
+import { PermissionsSettings } from "./PermissionsSettings";
 
-export type SettingsTab = "models" | "plugins" | "connection";
+export type SettingsTab = "models" | "plugins" | "permissions" | "connection";
 const tabs = [
   { id: "models", label: "模型", icon: IconCpu },
   { id: "plugins", label: "插件", icon: IconPlug },
+  { id: "permissions", label: "权限", icon: IconShield },
   { id: "connection", label: "连接", icon: IconKey },
 ] as const;
 
@@ -98,7 +107,7 @@ export function SettingsDialog({
                   <div>
                     <Dialog.Title>设置</Dialog.Title>
                     <Dialog.Description>
-                      模型、工具与连接，按需调整。
+                      模型、工具、权限与连接，按需调整。
                     </Dialog.Description>
                   </div>
                   <Dialog.Close asChild>
@@ -161,7 +170,7 @@ export function SettingsDialog({
                   ))}
                 </div>
                 <div className="settings-scroll" ref={content}>
-                  {(["models", "plugins"] as const).map((id) => (
+                  {(["models", "plugins", "permissions"] as const).map((id) => (
                     <motion.section
                       key={id}
                       id={`settings-panel-${id}`}
@@ -178,8 +187,10 @@ export function SettingsDialog({
                       {settings.config ? (
                         id === "models" ? (
                           <ModelSettings settings={settings} />
-                        ) : (
+                        ) : id === "plugins" ? (
                           <PluginSettings settings={settings} />
+                        ) : (
+                          <PermissionsSettings settings={settings} />
                         )
                       ) : settings.loading ? (
                         <div
