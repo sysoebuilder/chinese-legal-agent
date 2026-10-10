@@ -20,7 +20,7 @@ from ai_agent_learning.qdrant_config import DEFAULT_QDRANT_URL
 from ai_agent_learning.reranker import MODEL_PATH
 
 LAW_MANIFEST_URL = (
-    "https://github.com/sysoebuilder/agent100/releases/download/"
+    "https://github.com/sysoebuilder/chinese-legal-agent/releases/download/"
     "laws-20261007/laws-manifest.json"
 )
 LAW_MANIFEST_SHA256 = "ad420a0b838c0434c49c42fe680ac068ad1d4dd6132f9d905d02f89c262a3956"

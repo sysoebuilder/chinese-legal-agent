@@ -6,7 +6,7 @@ import uvicorn
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="agent100 Run API")
+    parser = argparse.ArgumentParser(description="中国法律智能体 Run API")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8001)
     args = parser.parse_args()

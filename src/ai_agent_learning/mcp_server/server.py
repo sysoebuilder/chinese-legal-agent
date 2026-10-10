@@ -36,7 +36,7 @@ async def lifespan(app: MCPServer) -> AsyncIterator[None]:
         await qdrant.close()
 
 
-server = MCPServer("agent100-law-search", lifespan=lifespan)
+server = MCPServer("chinese-legal-agent-law-search", lifespan=lifespan)
 
 
 @server.tool(name="search_laws", description=TOOL_DESCRIPTION)
@@ -58,7 +58,7 @@ async def search_laws(
 
 def main() -> None:
     """从当前项目配置读取密钥并启动 MCP 服务。"""
-    parser = argparse.ArgumentParser(description="agent100 法律检索 MCP Server")
+    parser = argparse.ArgumentParser(description="中国法律智能体 法律检索 MCP Server")
     parser.add_argument("--http", action="store_true", help="通过 Streamable HTTP 提供服务")
     parser.add_argument("--host", default="0.0.0.0", help="HTTP 监听地址，默认 0.0.0.0")
     parser.add_argument("--port", type=int, default=8000, help="HTTP 监听端口，默认 8000")

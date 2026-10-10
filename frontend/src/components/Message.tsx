@@ -93,7 +93,7 @@ export const Message = memo(function Message({
       )}
       <div className="message-main">
         <div className="message-label">
-          {message.role === "user" ? "你" : "Agent100"}
+          {message.role === "user" ? "你" : "中国法律智能体"}
         </div>
         <Reasoning text={message.reasoning} />
         {message.role === "user" ? (

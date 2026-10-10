@@ -1,6 +1,8 @@
-# agent100 · 律法 Agent
+# 中国法律智能体
 
-**面向中国法律法规检索与案件分析的严谨律法 Agent，内置 70 万余条法律知识记录。**
+**面向中国法律法规检索与案件分析的智能体，内置 703,271 条法律知识记录。**
+
+英文项目名：**Chinese Legal Agent** · 仓库名：`chinese-legal-agent`。
 
 ## 快速运行
 
@@ -11,8 +13,8 @@
 在 PowerShell 中执行：
 
 ```powershell
-git clone https://github.com/sysoebuilder/agent100.git
-cd agent100
+git clone https://github.com/sysoebuilder/chinese-legal-agent.git
+cd chinese-legal-agent
 .\scripts\start-compose.ps1
 ```
 
@@ -66,7 +68,7 @@ Agent 会识别法律问题、梳理客观事实、检索可能适用的法律�
 
 ## 严谨的法律分析流程
 
-agent100 将法律问题交给独立的 LangGraph 法律工作流，围绕事实和已检索依据组织结论。
+中国法律智能体将法律问题交给独立的 LangGraph 法律工作流，围绕事实和已检索依据组织结论。
 
 ```mermaid
 flowchart LR
@@ -110,7 +112,9 @@ flowchart LR
 
 ## 部署与数据持久化
 
-后端 API 和 Worker 共用 `agent100:local` 镜像，前端使用 `agent100-web:local`，初始化使用 `agent100-init:local`。PostgreSQL、Redis 和 Qdrant 是独立服务。镜像由当前源码构建；修改代码后需要重新构建对应镜像并重新创建容器。
+为兼容已初始化的数据，Compose 项目名、持久化卷、数据库和历史会话标识保留原有名称；这不会影响项目及镜像的新名称。
+
+后端 API 和 Worker 共用 `chinese-legal-agent:local` 镜像，前端使用 `chinese-legal-agent-web:local`，初始化使用 `chinese-legal-agent-init:local`。PostgreSQL、Redis 和 Qdrant 是独立服务。镜像由当前源码构建；修改代码后需要重新构建对应镜像并重新创建容器。
 
 当前部署的业务服务全部在容器中运行。Agent 不接入 Windows 终端 MCP，Compose 和启动脚本也不启动宿主机终端服务。详见 [部署说明](docs/run-api.md)。
 
@@ -131,7 +135,7 @@ flowchart LR
 docker compose ps -a
 docker compose logs -f api worker
 
-# 更新镜像并启动；已准备好的宿主机环境可以直接使用 Compose
+# 更新镜像并启动
 docker compose up -d --build --wait
 
 # 停止服务，保留持久化数据
@@ -181,9 +185,15 @@ MCP 地址为 `http://127.0.0.1:8000/mcp`，当前独立法律 MCP 的 HTTP 入�
 
 版本 **0.5.0** · Python **3.11+** · LangChain / LangGraph · FastAPI / Celery · PostgreSQL / Redis / Qdrant
 
+## 搜索关键词
+
+中国法律智能体、法律 AI 助手、中国法律法规、法律知识库、法律法规检索、法律依据检索、案件分析、法律 RAG、检索增强生成、混合检索、向量检索、BM25、重排模型、人工审批、MCP、LangGraph。
+
+Chinese Legal Agent, Chinese law, legal AI assistant, legal knowledge base, legal research, case analysis, legal RAG, retrieval-augmented generation, hybrid search, vector search, BM25, reranking, human-in-the-loop, MCP, LangGraph.
+
 ## English
 
-**agent100 is a legal agent for Chinese law retrieval and case analysis, backed by 703,271 legal knowledge records.** The count refers to indexed records, rather than distinct statutes.
+**Chinese Legal Agent provides Chinese law retrieval and case analysis, backed by 703,271 legal knowledge records.** The count refers to indexed records, rather than distinct statutes.
 
 The legal workflow maintains case facts, retrieves and reranks candidate legal grounds, requests missing information, and reviews whether the evidence is sufficient before generating an answer. Generation is instructed to use the supplied legal grounds and explain uncertainty, time, and jurisdiction. The workflow can return to retrieval or decline a definitive conclusion when the available grounds are insufficient.
 

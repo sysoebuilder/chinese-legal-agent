@@ -28,7 +28,7 @@ docker compose run --rm initialize
 
 配置初始化后依次检查法律资源和重排模型：
 
-- 法律数据来自 [laws-20261007 Release](https://github.com/sysoebuilder/agent100/releases/tag/laws-20261007)，先校验固定 SHA-256 的下载清单，再逐个校验附件。缺少法律集合时，拼接并解压快照，恢复 Qdrant `npc_laws` 的 703,271 条记录；缺少 BM25 索引时，只下载索引包并恢复到 `/app/data/law-bm25`。两者完整时跳过大文件下载。现有非空集合数量或向量配置不匹配时退出，不覆盖它。
+- 法律数据来自 [laws-20261007 Release](https://github.com/sysoebuilder/chinese-legal-agent/releases/tag/laws-20261007)，先校验固定 SHA-256 的下载清单，再逐个校验附件。缺少法律集合时，拼接并解压快照，恢复 Qdrant `npc_laws` 的 703,271 条记录；缺少 BM25 索引时，只下载索引包并恢复到 `/app/data/law-bm25`。两者完整时跳过大文件下载。现有非空集合数量或向量配置不匹配时退出，不覆盖它。
 - 重排模型来自官方 `BAAI/bge-reranker-v2-m3`，固定到版本 `953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e`。检查配置、分词器和 Safetensors 权重完整性，缺失或损坏时只下载对应文件。初始化容器将本机 `models/` 挂载为可写 `/app/models`，API 和 Worker 继续只读使用同一目录。
 
 法律分卷和快照缓存保存在应用数据卷 `/app/data/law-initialize`。下载失败保留 `.partial` 文件，下次使用 HTTP Range 续传并校验；Hugging Face 下载使用模型目录中的自身缓存。首次空卷安装需要下载约 3.42 GB 法律资源；模型缺失时还需约 2.29 GB。法律缓存、解压快照、工作索引和模型合计需要约 10 GB 可用空间，Qdrant 存储另计。

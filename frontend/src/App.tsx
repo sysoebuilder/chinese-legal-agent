@@ -388,7 +388,7 @@ export function App() {
                     a
                   </span>
                   <div className="message-main">
-                    <div className="message-label">Agent100</div>
+                    <div className="message-label">中国法律智能体</div>
                     <Reasoning text={chat.live.reasoning} />
                     <LiveContent content={chat.live.content} />
                     <p

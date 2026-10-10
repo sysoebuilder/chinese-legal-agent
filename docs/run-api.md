@@ -104,9 +104,9 @@ curl.exe --fail -F "snapshot=@<备份目录>/memories.snapshot" "http://127.0.0.
 
 ```powershell
 $backup = (Resolve-Path '<备份目录>').Path
-docker run --rm --network none --mount "type=bind,source=$backup,target=/backup,readonly" --mount type=volume,source=agent100_app-data,target=/restore --entrypoint tar agent100:local -xzf /backup/law-bm25.tar.gz -C /restore
-docker run --rm --network none --mount "type=bind,source=$backup,target=/backup,readonly" --mount type=volume,source=agent100_law-assets,target=/restore --entrypoint tar agent100:local -xf /backup/law-assets.tar -C /restore
-docker run --rm --network none --mount "type=bind,source=$backup,target=/backup,readonly" --mount type=volume,source=agent100_redis-data,target=/restore --entrypoint tar agent100:local -xzf /backup/redis-data.tar.gz -C /restore
+docker run --rm --network none --mount "type=bind,source=$backup,target=/backup,readonly" --mount type=volume,source=agent100_app-data,target=/restore --entrypoint tar chinese-legal-agent:local -xzf /backup/law-bm25.tar.gz -C /restore
+docker run --rm --network none --mount "type=bind,source=$backup,target=/backup,readonly" --mount type=volume,source=agent100_law-assets,target=/restore --entrypoint tar chinese-legal-agent:local -xf /backup/law-assets.tar -C /restore
+docker run --rm --network none --mount "type=bind,source=$backup,target=/backup,readonly" --mount type=volume,source=agent100_redis-data,target=/restore --entrypoint tar chinese-legal-agent:local -xzf /backup/redis-data.tar.gz -C /restore
 docker compose up -d --wait
 ```
 

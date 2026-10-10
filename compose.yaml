@@ -1,9 +1,10 @@
+# 保留部署标识以复用现有容器和已初始化的命名卷。
 name: agent100
 
 # API 和 Worker 使用同一份镜像、配置与资源挂载。
 x-agent: &agent
   build: .
-  image: agent100:local
+  image: chinese-legal-agent:local
   init: true
   restart: unless-stopped
   environment:
@@ -34,7 +35,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.init
-    image: agent100-init:local
+    image: chinese-legal-agent-init:local
     init: true
     restart: "no"
     environment:
@@ -53,7 +54,7 @@ services:
 
   frontend:
     build: ./frontend
-    image: agent100-web:local
+    image: chinese-legal-agent-web:local
     restart: unless-stopped
     ports:
       - "127.0.0.1:${AGENT_WEB_PORT:-3000}:80"

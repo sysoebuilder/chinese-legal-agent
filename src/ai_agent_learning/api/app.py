@@ -322,7 +322,7 @@ def create_app(
     config_store: ConfigStore | None = None,
 ) -> FastAPI:
     api_settings = settings or ApiSettings.from_env()
-    app = FastAPI(title="agent100 Run API", version="v1", lifespan=lifespan)
+    app = FastAPI(title="中国法律智能体 Run API", version="v1", lifespan=lifespan)
     app.state.settings = api_settings
     app.state.configured_store = store
     app.state.owns_event_bus = event_bus is None
