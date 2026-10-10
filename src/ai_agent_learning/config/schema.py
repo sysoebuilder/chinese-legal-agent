@@ -87,7 +87,7 @@ class PluginConfig(PluginSwitch):
     def connection_valid(self):
         if self.kind == "http" and self.url:
             ModelEntry.validate_url(self.url)
-        # 未启用的 Windows MCP 可等配置地址后再启用。
+        # 未启用的 HTTP MCP 可等配置地址后再启用。
         if self.kind == "http" and not self.url and self.able:
             raise ValueError("HTTP 插件需要 url")
         if self.kind == "stdio" and (not self.command or not self.command.strip()):
@@ -125,15 +125,6 @@ def default_plugins() -> dict[str, PluginConfig]:
             ),
         }
     )
-    url = os.getenv("WINDOWS_MCP_URL", "").strip()
-    plugins["windows_terminal"] = PluginConfig(
-        kind="http",
-        able=bool(url),
-        url=url or None,
-        headers={"Authorization": "Bearer ${WINDOWS_MCP_TOKEN}"},
-        read_timeout_seconds=330,
-        trust_env=False,
-    )
     return plugins
 
 
@@ -152,6 +143,8 @@ class MouldesConfig(ConfigModel):
 
     def tool_enabled(self, name: str) -> bool:
         plugin_name, separator, _ = name.partition("__")
+        if plugin_name == "windows_terminal":
+            return False
         plugin = self.plugins.get(plugin_name)
         if plugin is None or not plugin.able:
             return False

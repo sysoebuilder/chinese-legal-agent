@@ -32,11 +32,7 @@ def test_load_migrates_legacy_and_separates_keys(tmp_path, monkeypatch):
     assert config.active_model().model == "my-model"
     assert config.active_model().api_key == "active-key"
     assert config.secretsconfig.get("QQ_SMTP_AUTH_CODE") == "smtp-key"
-    assert config.mouldesconfig.plugins["windows_terminal"].able
-    assert (
-        config.mouldesconfig.plugins["windows_terminal"].url
-        == "http://host.docker.internal:8765/mcp"
-    )
+    assert "windows_terminal" not in config.mouldesconfig.plugins
     assert {path.name for path in tmp_path.glob("*.json")} == {
         "models.json",
         "mouldes.json",
@@ -104,7 +100,8 @@ def test_corrupt_file_is_not_silently_replaced(tmp_path):
     assert target.read_text() == "{broken"
 
 
-def test_mcp_config_excludes_disabled_and_resolves_stdio_secrets(monkeypatch):
+@pytest.mark.parametrize("platform", ["nt", "posix"])
+def test_mcp_config_excludes_disabled_and_resolves_stdio_secrets(monkeypatch, platform):
     from ai_agent_learning.config import plugins
     from ai_agent_learning.config.schema import PluginConfig
 
@@ -129,11 +126,17 @@ def test_mcp_config_excludes_disabled_and_resolves_stdio_secrets(monkeypatch):
     )
     # 不修改整个 os 模块，避免影响 pathlib 和测试运行器。
     monkeypatch.setattr(
-        plugins, "os", SimpleNamespace(name="nt", environ={"PATH": "test-path"})
+        plugins, "os", SimpleNamespace(name=platform, environ={"PATH": "test-path"})
     )
     local, cloud = configured_mcp_servers(config)
     assert set(cloud) == {"remote"}
     assert local["local"].env == {"PATH": "test-path", "TOKEN": "stdio-key"}
+    assert not config.mouldesconfig.tool_enabled("windows_terminal__run_command")
+
+
+def test_default_plugins_ignore_legacy_windows_terminal_environment(monkeypatch):
+    monkeypatch.setenv("WINDOWS_MCP_URL", "http://host.docker.internal:8766/mcp")
+    assert "windows_terminal" not in APPConfig().mouldesconfig.plugins
 
 
 @pytest.mark.parametrize("enabled", [False, True])
@@ -173,8 +176,12 @@ def test_graph_legal_switch_and_plugin_tool_filter(monkeypatch, enabled):
     app.mouldesconfig.legal.able = enabled
     app.mouldesconfig.plugins["web_search"].able = False
     app.mouldesconfig.plugins["github"].able = False
+    from ai_agent_learning.config.schema import PluginConfig
     from ai_agent_learning.model_config import ModelConfig
 
+    app.mouldesconfig.plugins["windows_terminal"] = PluginConfig(
+        kind="http", url="http://host.docker.internal:8766/mcp"
+    )
     graph = runtime.create_new_chat_agent(
         ModelConfig("glm", "test", "key", "https://example.com"),
         model=object(),
@@ -185,6 +192,9 @@ def test_graph_legal_switch_and_plugin_tool_filter(monkeypatch, enabled):
             ),
             SimpleNamespace(
                 name="cloudflare_docs__search", metadata={"risk_level": "low"}
+            ),
+            SimpleNamespace(
+                name="windows_terminal__run_command", metadata={"risk_level": "high"}
             ),
         ],
     )
@@ -199,6 +209,7 @@ def test_graph_legal_switch_and_plugin_tool_filter(monkeypatch, enabled):
     assert "check_legal_enabled" in graph.get_graph().nodes
     names = {tool.name for tool in captured["tools"]}
     assert "web_search" not in names and "github__disabled_tool" not in names
+    assert "windows_terminal__run_command" not in names
     assert {"current_time", "cloudflare_docs__search"} <= names
     assert "web_search" not in captured["system_prompt"]
 

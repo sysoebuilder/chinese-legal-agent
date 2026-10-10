@@ -29,7 +29,7 @@ x-agent: &agent
       condition: service_healthy
 
 services:
-  # 一次性初始化配置、法律快照/BM25 和重排模型，不依赖宿主终端 MCP。
+  # 一次性初始化配置、法律快照/BM25 和重排模型。
   initialize:
     build:
       context: .
@@ -43,8 +43,6 @@ services:
       QDRANT_URL: http://qdrant:6333
       LAWS_INIT_ENABLED: "true"
       RERANKER_INIT_ENABLED: "true"
-      # 新配置提前启用宿主终端连接；Token 在 provider 启动后从 .env 读取。
-      WINDOWS_MCP_URL: http://host.docker.internal:${WINDOWS_MCP_PORT:-8766}/mcp
     volumes:
       - ./data:/app/config
       - app-data:/app/data
@@ -52,14 +50,6 @@ services:
     depends_on:
       qdrant:
         condition: service_healthy
-
-  # 此入口调用 mcp_terminal.py 的 compose 模式，在 Windows 宿主机运行服务。
-  windows_terminal:
-    provider:
-      # Windows 上 Compose 自动追加 .exe。
-      type: ./.venv/Scripts/agent100-mcp-provider
-      options:
-        port: ${WINDOWS_MCP_PORT:-8766}
 
   frontend:
     build: ./frontend
@@ -100,8 +90,6 @@ services:
         condition: service_healthy
       qdrant:
         condition: service_healthy
-      windows_terminal:
-        condition: service_started
     deploy:
       resources:
         reservations:

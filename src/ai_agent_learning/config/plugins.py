@@ -15,7 +15,8 @@ def configured_mcp_servers(config: APPConfig):
     for name, plugin in config.mouldesconfig.plugins.items():
         if not plugin.able or plugin.kind == "builtin":
             continue
-        if name == "windows_terminal" and os.name == "nt":
+        # 旧配置可能仍启用宿主终端；当前 Agent 不接入它。
+        if name == "windows_terminal":
             continue
         if plugin.kind == "http":
             cloud[name] = {

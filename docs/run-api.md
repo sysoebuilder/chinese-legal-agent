@@ -12,7 +12,7 @@ docker compose up -d --build --wait
 ```
 
 默认 `compose.yaml` 启动独立前端、API、Celery worker、PostgreSQL、Redis 和 Qdrant。PostgreSQL、Qdrant、Redis 的服务和数据库文件全部位于容器与 Docker 命名卷中。BM25 索引和安装缓存位于应用数据卷，法律离线资源位于资源卷；无需启动本机数据库。
-Compose 还会运行一次性 `initialize` 容器：初始化共享配置 JSON，从 GitHub Release 恢复缺失的法律快照和 BM25 索引，并从 Hugging Face 下载缺失的重排模型。已有完整资源会跳过。初始化等待 Qdrant 健康，API 和 Worker 等待初始化成功退出。也可单独执行 `docker compose build initialize` 和 `docker compose run --rm initialize`，只启动 Qdrant 和初始化容器，无需 GPU worker 或宿主 MCP。详见 [初始化容器](model-configuration.md#初始化容器)。
+Compose 还会运行一次性 `initialize` 容器：初始化共享配置 JSON，从 GitHub Release 恢复缺失的法律快照和 BM25 索引，并从 Hugging Face 下载缺失的重排模型。已有完整资源会跳过。初始化等待 Qdrant 健康，API 和 Worker 等待初始化成功退出。也可单独执行 `docker compose build initialize` 和 `docker compose run --rm initialize`，只启动 Qdrant 和初始化容器，无需 GPU worker。详见 [初始化容器](model-configuration.md#初始化容器)。
 API 与 worker 共用 `Dockerfile` 构建的镜像，基础服务健康后才启动应用。
 接口文档仍是 <http://127.0.0.1:8001/docs>。
 
@@ -41,7 +41,7 @@ QDRANT_URL=http://127.0.0.1:6333
 
 Compose 启动后，在网页模型设置中填写模型和凭据即可开始对话。API、Worker 和法律 MCP 共用数据库及 BM25 索引。
 
-BM25 工作索引保存在应用数据卷，法律检索通过容器中的 Worker 或法律 MCP 执行。数据库连接仍可使用映射出的本机端口；Windows 终端 MCP 在主机后台运行。
+BM25 工作索引保存在应用数据卷，法律检索通过容器中的 Worker 或法律 MCP 执行。数据库连接仍可使用映射出的本机端口。当前部署不接入 Windows 终端 MCP。
 
 如果 `docker` 不在当前终端的 PATH 中，本机可以用以下命令启动：
 
@@ -76,7 +76,7 @@ docker compose down
 | `agent100_app-data` | `law-bm25/`、法规安装状态和临时缓存 |
 | `agent100_law-assets` | 法律原始数据、向量离线包 |
 
-备份统一存放在 `data/backups/`。配置与 Windows MCP 日志继续保留在主机。全新空卷的法律数据和 BM25 索引由初始化容器从固定 GitHub Release 恢复；原始法律离线包无需下载。记忆和历史会话仍需单独恢复备份。
+备份统一存放在 `data/backups/`。配置继续保留在主机。全新空卷的法律数据和 BM25 索引由初始化容器从固定 GitHub Release 恢复；原始法律离线包无需下载。记忆和历史会话仍需单独恢复备份。
 
 2026-10-07 已生成并验证完整备份 `data/backups/20261007-143524/`：PostgreSQL、Qdrant 和 Redis 在隔离容器中成功恢复，19 个 BM25/资源文件摘要一致。旧库及批量生成历史归档在 `data/backups/legacy-20261007/`。23 处旧工作目录、重复快照及原生数据库文件已移出项目；用户已手动删除暂存目录和两份旧 Docker 数据盘备份。详见 [迁移状态](reports/2026-10-07-container-storage-status.md)。当前 Docker 数据盘通过原生配置直接使用 `E:\DockerDesktopData\local\wsl\disk\docker_data.vhdx`；`C:\Users\17743\AppData\Local\Docker` 的目录联接已移除，C 盘旧数据盘已迁出，其两份临时备份现已由用户删除。Docker 启动时仍可能在 C 盘创建普通日志目录。实际配置 `C:\Users\17743\AppData\Roaming\Docker\settings-store.json` 中的 `CustomWslDistroDir` 指向上述 E 盘 WSL 目录；配置目录使用普通目录，不再依赖旧配置目录联接。20:03 已修正一次默认 C 盘重新注册问题并重新验证；C 盘停用的新建空盘残留见迁移记录。
 
@@ -115,7 +115,7 @@ docker compose up -d --wait
 Linux 镜像安装 CUDA 12.8 版 PyTorch，Worker 通过 Compose 获取一张 NVIDIA GPU，使用 `prefork` worker。
 法律和记忆检索共用的 BGE 重排模型保留自动选择逻辑：CUDA 可用时使用 GPU 和 float16；不可用时退回 CPU 和 float32。
 Windows Docker Desktop 需要启用 WSL 2 后端，宿主机安装支持它的 NVIDIA 驱动；CUDA 运行库已包含在镜像中，无需在容器内安装显卡驱动。
-开发源码通过只读目录挂载；只修改 Python 源码时重启 API 和 worker 即可。修改依赖或 Dockerfile 时需要重新构建并重建应用容器：
+API 和 Worker 使用镜像内的源码，不挂载主机源码。修改 Python 源码、依赖或 Dockerfile 后，需要重新构建并重建应用容器：
 
 ```powershell
 docker compose up -d --build --wait api worker

@@ -4,7 +4,7 @@
 
 ## 快速运行
 
-当前默认部署环境为 **Windows + Docker Desktop（Linux containers）+ NVIDIA GPU**。安装 Python 3.11+、Git 和支持 provider 的 Docker Compose 2.36+，启动 Docker Desktop，并确保容器能够使用 NVIDIA GPU。
+当前默认部署环境为 **Windows + Docker Desktop（Linux containers）+ NVIDIA GPU**。安装 Git 和 Docker Desktop（含 Docker Compose），启动 Docker Desktop，并确保容器能够使用 NVIDIA GPU。
 
 ### 1. 获取项目并启动
 
@@ -16,7 +16,7 @@ cd agent100
 .\scripts\start-compose.ps1
 ```
 
-启动脚本自动准备宿主机 Python 环境与 Windows 终端 MCP provider，再构建并启动前端、API、Worker、PostgreSQL、Redis、Qdrant 和初始化服务。API 与 Worker 使用镜像内的源码，不挂载主机 `src`。
+启动脚本直接构建并启动前端、API、Worker、PostgreSQL、Redis、Qdrant 和初始化服务，无需安装宿主机 Python。API 与 Worker 使用镜像内的源码，不挂载主机 `src`。
 
 首次启动时，初始化容器自动创建配置、从 GitHub Release 下载并恢复法律库及 BM25 索引、从 Hugging Face 下载 BGE 重排模型。已有完整资源会跳过；初始化不需要模型 API Key，API 和 Worker 在初始化成功后启动。首次构建和资源下载需要访问 PyPI、PyTorch 下载源、GitHub Release 与 Hugging Face。
 
@@ -105,7 +105,6 @@ flowchart LR
 | 中断与恢复 | PostgreSQL checkpoint、人工输入与工具审批、失败重试、停止后继续会话 |
 | 长期记忆 | 异步整理对话记忆，GLM Embedding-3 向量化，Qdrant 检索、去重和更新 |
 | 工具扩展 | 时间、联网搜索、邮件、记忆管理，以及本地与云端 MCP 连接 |
-| Windows 终端 | 宿主机 MCP 执行 PowerShell，Compose provider 管理服务启停 |
 | API | FastAPI 运行接口、SSE 事件、Redis + Celery 任务调度 |
 | 可观测性 | 结构化日志、节点耗时、运行状态、持久化会话与任务恢复信息 |
 
@@ -113,7 +112,7 @@ flowchart LR
 
 后端 API 和 Worker 共用 `agent100:local` 镜像，前端使用 `agent100-web:local`，初始化使用 `agent100-init:local`。PostgreSQL、Redis 和 Qdrant 是独立服务。镜像由当前源码构建；修改代码后需要重新构建对应镜像并重新创建容器。
 
-Windows 终端 MCP 在宿主机运行，由启动脚本准备的 `.venv` 提供运行环境。它是当前默认部署中的宿主机组件，服务地址和认证信息由 provider 配置，运行日志保存在 `data/compose-mcp/`。Linux 主机部署需移除 Windows provider 及 Worker 对它的依赖，并按需要配置远端终端 MCP，详见 [部署说明](docs/run-api.md)。
+当前部署的业务服务全部在容器中运行。Agent 不接入 Windows 终端 MCP，Compose 和启动脚本也不启动宿主机终端服务。详见 [部署说明](docs/run-api.md)。
 
 | 数据 | 持久化位置 |
 | --- | --- |
@@ -188,8 +187,8 @@ MCP 地址为 `http://127.0.0.1:8000/mcp`，当前独立法律 MCP 的 HTTP 入�
 
 The legal workflow maintains case facts, retrieves and reranks candidate legal grounds, requests missing information, and reviews whether the evidence is sufficient before generating an answer. Generation is instructed to use the supplied legal grounds and explain uncertainty, time, and jurisdiction. The workflow can return to retrieval or decline a definitive conclusion when the available grounds are insufficient.
 
-For the default Windows deployment, install Python 3.11+, Docker Desktop with Linux containers, Docker Compose 2.36+, and an NVIDIA GPU with container support. Clone the repository and run `scripts/start-compose.ps1`, then open [http://127.0.0.1:3000](http://127.0.0.1:3000) and configure the model in Settings. A GLM API key is required for semantic law retrieval and memory embeddings, including when DeepSeek is the chat model.
+For the default Windows deployment, install Git, Docker Desktop with Linux containers and Docker Compose, and an NVIDIA GPU with container support. Clone the repository and run `scripts/start-compose.ps1`, then open [http://127.0.0.1:3000](http://127.0.0.1:3000) and configure the model in Settings. A GLM API key is required for semantic law retrieval and memory embeddings, including when DeepSeek is the chat model.
 
-Initialization restores missing law data and BM25 indexes from a fixed release and downloads the BGE reranker. Complete resources are reused. API and Worker run the source packaged in their image; the web UI serves built static assets. Windows terminal MCP runs on the host. Configuration and model files use host mounts; database and index data persist in named Docker volumes.
+Initialization restores missing law data and BM25 indexes from a fixed release and downloads the BGE reranker. Complete resources are reused. API and Worker run the source packaged in their image; the web UI serves built static assets. Windows terminal MCP is excluded from the Agent and Compose deployment. Configuration and model files use host mounts; database and index data persist in named Docker volumes.
 
 See the [deployment and API guide](docs/run-api.md), [configuration guide](docs/model-configuration.md), and [frontend guide](frontend/README.md).

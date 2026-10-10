@@ -15,7 +15,7 @@ API 与 Worker 启动时读取四个 JSON 文件并创建 `APPConfig`：
 
 ## 初始化容器
 
-独立的一次性 `initialize` 服务通过 `Dockerfile.init` 构建，初始化配置、法律数据和重排模型。镜像只安装配置解析、HTTP 下载和 Hugging Face 下载依赖，不安装 PyTorch/CUDA，也不加载模型。它等待 Qdrant 健康后运行，不依赖 PostgreSQL、Redis、宿主终端 MCP 或模型 API Key。
+独立的一次性 `initialize` 服务通过 `Dockerfile.init` 构建，初始化配置、法律数据和重排模型。镜像只安装配置解析、HTTP 下载和 Hugging Face 下载依赖，不安装 PyTorch/CUDA，也不加载模型。它等待 Qdrant 健康后运行，不依赖 PostgreSQL、Redis 或模型 API Key。
 
 在项目根目录单独执行：
 
@@ -43,7 +43,7 @@ Qdrant 已运行时可使用 `docker compose run --rm --no-deps initialize`。�
 
 常规 `docker compose up -d --build --wait` 会自动运行初始化容器，API 和 Worker 通过 `service_completed_successfully` 等待其成功完成。初始化结束后容器处于正常退出状态，不是持续运行的服务。
 
-Compose 初始化新插件配置时，将 Windows MCP 地址设为 `http://host.docker.internal:8766/mcp`；可用 `WINDOWS_MCP_PORT` 同时指定 provider 端口和新配置的地址。已有 JSON 不会被这个默认地址覆盖。本机终端 provider 随后生成的 Token 由 Worker 从共享 `.env` 读取；已有 `secrets.json` 中的同名 Token 优先。
+初始化不创建 Windows 终端 MCP 插件，旧 `.env` 中的 `WINDOWS_MCP_URL` 也不会启用它。当前 Agent 忽略旧配置中名为 `windows_terminal` 的插件及其工具，Compose 不启动宿主机终端服务。
 
 也可以在本机执行同一入口：
 
@@ -85,7 +85,7 @@ Compose 初始化新插件配置时，将 Windows MCP 地址设为 `http://host.
 
 ## 插件和法律子图
 
-`mouldes.json` 的 `plugins` 按工具名或 MCP 服务名配置 `able`。内置插件使用 `kind: "builtin"`，HTTP 和 stdio MCP 分别使用 `http` 和 `stdio`。默认保留原有内置工具、GitHub 和 Cloudflare Docs。Windows MCP 的初始地址和开关根据首次加载时的 `WINDOWS_MCP_URL` 设置，之后通过 JSON 或 API 修改。
+`mouldes.json` 的 `plugins` 按工具名或 MCP 服务名配置 `able`。内置插件使用 `kind: "builtin"`，HTTP 和 stdio MCP 分别使用 `http` 和 `stdio`。默认保留原有内置工具、GitHub 和 Cloudflare Docs。Windows 终端 MCP 不参与当前 Agent 的工具连接。
 
 以下局部配置可发送给修改接口：
 

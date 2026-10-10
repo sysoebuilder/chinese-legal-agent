@@ -7,7 +7,6 @@ from contextlib import AsyncExitStack, asynccontextmanager
 import httpx
 import httpx2
 
-from ai_agent_learning.api.errors import WindowsTerminalUnavailable
 from ai_agent_learning.config import (
     APPConfig,
     PermissionsConfig,
@@ -84,8 +83,6 @@ async def open_worker_agent(database_url: str, public_config: dict[str, str]):
                     cloud_servers=cloud_servers,
                 )
             )
-            if "windows_terminal" in connections.errors:
-                raise WindowsTerminalUnavailable()
             tools = connections.tools
         model = await stack.enter_async_context(open_worker_model(config))
         memory_model = await stack.enter_async_context(open_worker_model(config))

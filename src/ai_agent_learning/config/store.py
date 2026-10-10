@@ -113,14 +113,6 @@ class ConfigStore:
         active = dotenv_values(
             legacy_dir / "active-model.env", interpolate=False, encoding="utf-8-sig"
         )
-        terminal_url = (
-            os.getenv("WINDOWS_MCP_URL", "").strip()
-            or (source.get("WINDOWS_MCP_URL") or "").strip()
-        )
-        if terminal_url:
-            terminal = config.mouldesconfig.plugins["windows_terminal"]
-            terminal.url = terminal_url
-            terminal.able = True
         for name, value in source.items():
             if value is not None and any(
                 marker in name
