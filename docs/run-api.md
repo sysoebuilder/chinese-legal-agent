@@ -1,7 +1,7 @@
-# 第 71 天：Run API、SSE 与 Celery
+# Run API、SSE 与部署
 
-已有的终端聊天和模型配置保留。API 复用同一套 Agent、工具、模型配置与 PostgreSQL checkpoint。
-模型仍通过 `agent100 config` 选择；API worker 不执行 `input()`，工具审批和法律问题补充改为中断事件。
+网页通过 Run API 调用 Agent、工具和 PostgreSQL checkpoint。
+模型与凭据在网页设置中管理；工具审批和法律问题补充通过中断事件提交回应。
 
 ## Docker Compose 启动
 
@@ -27,9 +27,9 @@ API 与 worker 共用 `Dockerfile` 构建的镜像，基础服务健康后才启
 页面源码位于 `frontend/src/`。本机开发时在 `frontend` 目录执行 `npm ci`、`npm run dev`，
 打开 <http://127.0.0.1:5173/>；Vite 将 `/v1` 代理到本机 API 的 8001 端口。
 前端镜像通过 Node.js 构建，再由 Nginx 提供资源，运行容器不启动 Vite 开发服务器。
-模型配置仍在终端进行，不会打包到前端；开发与验证说明见 `frontend/README.md`。
+模型配置在网页设置中管理，凭据保存在后端配置目录；开发与验证说明见 `frontend/README.md`。
 
-主机 `data/` 挂载为 `/app/config`，通过 `LLM_CLI_CONFIG_DIR` 读取 `models.json`、`mouldes.json` 和 `secrets.json`，构造 `APPConfig`；首次启动兼容迁移原来的 `.env` 和 `active-model.env`。配置查询及修改接口见 [应用配置](model-configuration.md)，保存使用文件锁和原子替换。`LLM_CLI_DATA_DIR=/app/data` 独立指向 Docker 应用数据卷，数据库与索引不会写入主机配置目录。
+主机 `data/` 挂载为 `/app/config`，通过 `AGENT_CONFIG_DIR` 读取 `models.json`、`mouldes.json` 和 `secrets.json`，构造 `APPConfig`；首次启动兼容迁移原来的 `.env` 和 `active-model.env`。配置查询及修改接口见 [应用配置](model-configuration.md)，保存使用文件锁和原子替换。`AGENT_DATA_DIR=/app/data` 独立指向 Docker 应用数据卷，数据库与索引不会写入主机配置目录。
 Compose 覆盖数据库、Redis 和 Qdrant 地址，连接 `postgres`、`redis` 和 `http://qdrant:6333`，无需修改本机配置文件。
 PostgreSQL、Redis 和 Qdrant 映射到本机 `127.0.0.1:5432`、`127.0.0.1:6379`、`127.0.0.1:6333`。本机 `data/.env` 使用以下连接配置（也见 `.env.example`）：
 
@@ -39,20 +39,9 @@ AGENT_REDIS_URL=redis://127.0.0.1:6379/0
 QDRANT_URL=http://127.0.0.1:6333
 ```
 
-Compose 启动后，网页和容器中的聊天程序共用数据库及 BM25 索引：
+Compose 启动后，在网页模型设置中填写模型和凭据即可开始对话。API、Worker 和法律 MCP 共用数据库及 BM25 索引。
 
-```powershell
-docker compose run --rm worker agent100 chat
-```
-
-本机不再保存 BM25 工作索引，因此需要法律检索的聊天或法律 MCP 应在容器中运行。数据库连接仍可使用映射出的本机端口；Windows 终端 MCP 继续在主机后台运行。
-
-没有模型配置时，先构建镜像，再交互配置：
-
-```powershell
-docker compose build api
-docker compose run --rm --no-deps api agent100 config
-```
+BM25 工作索引保存在应用数据卷，法律检索通过容器中的 Worker 或法律 MCP 执行。数据库连接仍可使用映射出的本机端口；Windows 终端 MCP 在主机后台运行。
 
 如果 `docker` 不在当前终端的 PATH 中，本机可以用以下命令启动：
 
@@ -87,7 +76,7 @@ docker compose down
 | `agent100_app-data` | `law-bm25/`、法规安装状态和临时缓存 |
 | `agent100_law-assets` | 法律原始数据、向量离线包 |
 
-备份统一存放在 `data/backups/`。配置与 Windows MCP 日志继续保留在主机。全新空卷的法律数据和 BM25 索引由初始化容器从固定 GitHub Release 恢复；原始法律离线包无需下载。记忆和历史会话仍需单独恢复备份。离线资源齐全时也可执行 `docker compose run --rm worker agent100 laws install` 安装法律。
+备份统一存放在 `data/backups/`。配置与 Windows MCP 日志继续保留在主机。全新空卷的法律数据和 BM25 索引由初始化容器从固定 GitHub Release 恢复；原始法律离线包无需下载。记忆和历史会话仍需单独恢复备份。
 
 2026-10-07 已生成并验证完整备份 `data/backups/20261007-143524/`：PostgreSQL、Qdrant 和 Redis 在隔离容器中成功恢复，19 个 BM25/资源文件摘要一致。旧库及批量生成历史归档在 `data/backups/legacy-20261007/`。23 处旧工作目录、重复快照及原生数据库文件已移出项目；用户已手动删除暂存目录和两份旧 Docker 数据盘备份。详见 [迁移状态](reports/2026-10-07-container-storage-status.md)。当前 Docker 数据盘通过原生配置直接使用 `E:\DockerDesktopData\local\wsl\disk\docker_data.vhdx`；`C:\Users\17743\AppData\Local\Docker` 的目录联接已移除，C 盘旧数据盘已迁出，其两份临时备份现已由用户删除。Docker 启动时仍可能在 C 盘创建普通日志目录。实际配置 `C:\Users\17743\AppData\Roaming\Docker\settings-store.json` 中的 `CustomWslDistroDir` 指向上述 E 盘 WSL 目录；配置目录使用普通目录，不再依赖旧配置目录联接。20:03 已修正一次默认 C 盘重新注册问题并重新验证；C 盘停用的新建空盘残留见迁移记录。
 
@@ -205,7 +194,6 @@ beat 是入队意图的补偿发布器。已经入队的任务由 Redis/Celery �
 `run_id` 对应一轮执行；`thread_id` 对应持续的会话和 LangGraph checkpoint。
 新建运行不传 `thread_id` 时创建会话；会话成功完成后，可用同一个 `thread_id` 提交下一轮消息。
 同一会话存在排队、执行、等待输入或失败运行时，提交新运行返回 409；请先恢复或取消。
-不要同时从终端和 API 执行同一 `thread_id`，终端入口尚未加入 API 的会话执行锁。
 取消保留 checkpoint 和会话历史。等待运行进入 `cancelled` 后，可在同一会话继续发送消息；Worker 会清除已取消运行的待执行节点，不恢复旧审批或重跑旧工具。未保存结果的工具调用会补充停止说明，避免模型将它当作已经完成。此前因旧取消断点而失败的新运行，也可通过 `/resume` 重试。
 
 历史会话列表中可点击垃圾桶按钮，确认后永久删除对应会话。删除当前会话后，页面切换到新对话并清除本地的会话和运行缓存。
@@ -333,12 +321,12 @@ Worker 流式取消检查最多每秒一次，模型/工具调用前和执行结
 失败的运行可提交 `{ "responses": {} }` 重试；如果 checkpoint 仍有待回应中断，会重新发送中断事件，随后提交回应。
 
 Worker 意外退出可能留下 `running` 状态。前端在选择/刷新会话、SSE 首次异常断开或点击“检查断点”时查询会话的 `recovery`，
-复用 CLI 的 `snapshot.next` 判定，并确认该 checkpoint 属于当前 run、会话执行锁已释放，
+使用 `snapshot.next` 判定待执行节点，并确认该 checkpoint 属于当前 run、会话执行锁已释放，
 才显示“从断点重连”。点击后 API 再次检查执行锁和 checkpoint，增加 generation 并重新入队；
 Worker 使用空输入从原断点继续，不添加用户消息。若断点仍需要审批或补充信息，会再次显示对应表单。
 正常执行、没有断点、旧任务断点和已经取消的任务均不允许重连。
 刷新或更换浏览器后，选择会话即可从服务器查询其未完成的 API 任务，无需本地 run_id 缓存。
-此入口恢复 `agent_runs` 中的 API 任务；只由 CLI 创建的未完成轮次仍在 CLI 中恢复。
+此入口恢复 `agent_runs` 中的任务；无法确认所属运行的历史断点不自动恢复。
 断点查询没有固定轮询。Worker 退出不会必然断开浏览器到 API 的 SSE 连接，
 所以在 SSE 仍正常但任务无进展时，可手动点击“检查断点”。SSE 的自动重连仍保留退避重试，
 同一段没有新事件的连接故障只触发一次自动断点查询，避免故障期间重复读取 checkpoint。

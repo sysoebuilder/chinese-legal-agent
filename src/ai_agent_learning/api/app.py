@@ -236,7 +236,7 @@ async def create_run(body: CreateRun, request: Request) -> RunView:
             key_ref = app_config.modelconfig.models[app_config.modelconfig.active].api_key_ref
             permission_mode = app_config.permissionsconfig.mode
     except (SystemExit, ValueError, OSError):
-        raise HTTPException(503, "请先在终端运行 agent100 config 配置模型") from None
+        raise HTTPException(503, "请先在网页设置中配置模型和 API Key") from None
     public_config = {
         "provider": config.provider,
         "model": config.model,

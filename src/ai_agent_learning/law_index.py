@@ -28,7 +28,7 @@ class LawBm25Index:
         manifest_path = self.path / "manifest.json"
         if not manifest_path.is_file():
             raise FileNotFoundError(
-                f"法规倒排索引不存在：{manifest_path}；请运行 agent100 laws install"
+                f"法规倒排索引不存在：{manifest_path}；请运行 docker compose run --rm initialize 初始化法律库"
             )
         self.manifest: dict[str, Any] = json.loads(
             manifest_path.read_text(encoding="utf-8")

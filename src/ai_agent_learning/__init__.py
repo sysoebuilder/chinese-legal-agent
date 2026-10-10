@@ -1,3 +1,3 @@
-"""Reusable code extracted from the learner's daily AI Agent experiments."""
+"""Chinese legal agent runtime, tools, and application services."""
 
 __all__: list[str] = []

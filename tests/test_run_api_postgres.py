@@ -87,7 +87,7 @@ def test_shared_history_paginates_old_checkpoints_after_compaction(store):
     with store._connect() as connection:
         connection.execute(
             "INSERT INTO sessions (thread_id,name,created_at,updated_at) "
-            "VALUES (%s,'terminal conversation',now(),now())",
+            "VALUES (%s,'historical conversation',now(),now())",
             (thread_id,),
         )
     assert store.history(thread_id, 10, None).messages == []
@@ -111,7 +111,7 @@ def test_shared_history_paginates_old_checkpoints_after_compaction(store):
                 {
                     "messages": [
                         HumanMessage(
-                            id=f"terminal-user-{index}",
+                            id=f"historical-user-{index}",
                             content=f"question-{index}",
                         )
                     ]
@@ -136,8 +136,8 @@ def test_shared_history_paginates_old_checkpoints_after_compaction(store):
         )
     page = store.history(thread_id, 10, None)
     assert len(page.messages) == 20
-    assert page.messages[0].id == "terminal-user-2"
-    assert page.next_before == "terminal-user-2"
+    assert page.messages[0].id == "historical-user-2"
+    assert page.next_before == "historical-user-2"
     older = store.history(thread_id, 10, page.next_before)
     assert len(older.messages) == 4 and not older.has_more
     assert store.sessions(1, 0).sessions[0].thread_id == UUID(thread_id)
@@ -145,7 +145,7 @@ def test_shared_history_paginates_old_checkpoints_after_compaction(store):
         store.history(thread_id, 10, "other-session-id")
 
 
-def test_shared_history_reads_api_and_terminal_turns_together(store):
+def test_shared_history_reads_api_and_historical_turns_together(store):
     from langchain_core.messages import AIMessage, HumanMessage
     from langgraph.checkpoint.postgres import PostgresSaver
     from langgraph.graph import END, START, MessagesState, StateGraph
@@ -178,15 +178,15 @@ def test_shared_history_reads_api_and_terminal_turns_together(store):
     with PostgresSaver.from_conn_string(store.database_url) as saver:
         agent = graph.compile(checkpointer=saver)
         agent.invoke(
-            {"messages": [HumanMessage(content="terminal question")]},
+            {"messages": [HumanMessage(content="historical question")]},
             {"configurable": {"thread_id": run["thread_id"]}},
         )
     page = store.history(run["thread_id"], 10, None)
     assert [message.content for message in page.messages] == [
         "API question",
         "reply:API question",
-        "terminal question",
-        "reply:terminal question",
+        "historical question",
+        "reply:historical question",
     ]
 
 

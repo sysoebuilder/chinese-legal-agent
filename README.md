@@ -34,7 +34,7 @@ docker compose logs -f initialize
 2. 法律语义检索和长期记忆使用 GLM Embedding-3，联网搜索也使用 GLM 服务，因此还需配置 GLM Key（`ZAI_API_KEY`），包括使用 DeepSeek 对话模型时。
 3. 在插件设置中确认法律流程已启用；在“权限”中可选择“限制”，让中、高、严重风险的工具调用经过人工确认。
 
-模型、密钥和权限均可通过网页修改，无需先运行 CLI 配置命令。当前默认权限模式为“无限制”。如果启用了 `AGENT_API_TOKEN`，在网页连接设置中填写相同的访问令牌。
+模型、密钥和权限均通过网页设置修改。当前默认权限模式为“无限制”。如果启用了 `AGENT_API_TOKEN`，在网页连接设置中填写相同的访问令牌。
 
 ### 3. 开始法律对话
 
@@ -143,7 +143,7 @@ docker compose down
 
 邮件工具需要在密钥设置中填写 `QQ_SMTP_USERNAME` 和 `QQ_SMTP_AUTH_CODE`。启用哪些工具、连接哪些 MCP、采用哪档权限，均可在网页中配置。
 
-## API、MCP 与终端入口
+## API 与法律 MCP
 
 网页以 Run API 为基础，通过 SSE 接收实时事件。外部程序也可以创建运行、查询状态、响应中断和读取会话历史，详见 [Run API 使用说明](docs/run-api.md)。
 
@@ -160,13 +160,6 @@ docker compose run --rm --no-deps -p 127.0.0.1:8000:8000 worker python -m ai_age
 ```
 
 MCP 地址为 `http://127.0.0.1:8000/mcp`，当前独立法律 MCP 的 HTTP 入口不提供鉴权。法律 MCP 与网页共用 Qdrant 法律集合、BM25 索引和本地重排模型。
-
-CLI 保留用于终端对话、配置与维护：
-
-```powershell
-docker compose run --rm worker agent100 chat
-docker compose run --rm --no-deps api agent100 config
-```
 
 ## 代码与文档
 

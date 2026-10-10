@@ -22,7 +22,7 @@ from ai_agent_learning.database import validate_database_url
 
 
 def has_pending_turn(snapshot: Any) -> bool:
-    """CLI 和 API 共用的断点判定；恢复时不追加用户消息。"""
+    """判定运行是否存在待执行节点；恢复时不追加用户消息。"""
     return bool(snapshot.next)
 
 

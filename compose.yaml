@@ -7,8 +7,8 @@ x-agent: &agent
   init: true
   restart: unless-stopped
   environment:
-    LLM_CLI_DATA_DIR: /app/data
-    LLM_CLI_CONFIG_DIR: /app/config
+    AGENT_DATA_DIR: /app/data
+    AGENT_CONFIG_DIR: /app/config
     CHECKPOINT_DATABASE_URL: postgresql://agent100:agent100@postgres:5432/agent100
     AGENT_REDIS_URL: redis://redis:6379/0
     QDRANT_URL: http://qdrant:6333
@@ -38,8 +38,8 @@ services:
     init: true
     restart: "no"
     environment:
-      LLM_CLI_CONFIG_DIR: /app/config
-      LLM_CLI_DATA_DIR: /app/data
+      AGENT_CONFIG_DIR: /app/config
+      AGENT_DATA_DIR: /app/data
       QDRANT_URL: http://qdrant:6333
       LAWS_INIT_ENABLED: "true"
       RERANKER_INIT_ENABLED: "true"

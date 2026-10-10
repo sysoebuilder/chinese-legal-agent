@@ -1,4 +1,4 @@
-"""构建 worker 的 Agent 资源，不创建 TerminalUI 或读取 input()。"""
+"""构建 Worker 的模型、工具和持久化 Agent 资源。"""
 
 import asyncio
 import os

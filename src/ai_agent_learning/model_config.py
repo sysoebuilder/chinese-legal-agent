@@ -1,16 +1,8 @@
-"""模型适配结构及兼容入口；持久化统一交给 config 模块。"""
+"""模型适配结构、参数校验及部署配置路径。"""
 
-import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlsplit
-
-from ai_agent_learning.paths import get_data_dir
-
-PROVIDER_DEFAULTS = {
-    "glm": ("GLM-5.3-flash", "https://open.bigmodel.cn/api/paas/v4/"),
-    "deepseek": ("deepseek-flash", "https://api.deepseek.com"),
-}
 
 
 @dataclass(frozen=True)
@@ -44,55 +36,6 @@ class ModelConfig:
 
 
 def source_config_path() -> Path:
-    return _config_dir() / ".env"
+    from ai_agent_learning.config import config_dir
 
-
-def active_config_path() -> Path:
-    return _config_dir() / "active-model.env"
-
-
-def _config_dir() -> Path:
-    configured = os.getenv("LLM_CLI_CONFIG_DIR")
-    directory = Path(configured).expanduser().resolve() if configured else get_data_dir()
-    directory.mkdir(parents=True, exist_ok=True)
-    return directory
-
-
-def create_model_config(provider: str, api_key: str, model: str = "") -> ModelConfig:
-    try:
-        default_model, base_url = PROVIDER_DEFAULTS[provider]
-    except KeyError as error:
-        raise ValueError("模型提供商只支持 glm 或 deepseek") from error
-    return ModelConfig(provider, model.strip() or default_model, api_key.strip(), base_url)
-
-
-def save_source_model(config: ModelConfig) -> Path:
-    """保存模型和对应凭据，分别写入 models.json 与 secrets.json。"""
-    from ai_agent_learning.config import ConfigStore
-
-    return ConfigStore().save_model(config, activate=False)
-
-
-def load_model_choices() -> list[ModelConfig]:
-    from ai_agent_learning.config import load_app_config
-
-    app = load_app_config()
-    return [
-        ModelConfig(entry.provider, entry.model, app.secretsconfig.get(entry.api_key_ref), entry.base_url)
-        for entry in app.modelconfig.models.values()
-    ]
-
-
-def save_active_model(config: ModelConfig) -> Path:
-    from ai_agent_learning.config import ConfigStore
-
-    return ConfigStore().save_model(config)
-
-
-def load_active_model() -> ModelConfig:
-    from ai_agent_learning.config import load_app_config
-
-    try:
-        return load_app_config().active_model()
-    except (OSError, UnicodeError, ValueError) as error:
-        raise SystemExit("当前模型配置缺失或无效，请运行 agent100 config 选择模型。") from error
+    return config_dir() / ".env"

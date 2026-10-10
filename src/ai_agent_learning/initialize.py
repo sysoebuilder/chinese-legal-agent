@@ -24,7 +24,7 @@ def main() -> int:
     parser.add_argument(
         "--config-dir",
         type=Path,
-        help="配置目录；默认遵循 LLM_CLI_CONFIG_DIR 和 LLM_CLI_DATA_DIR",
+        help="配置目录；默认遵循 AGENT_CONFIG_DIR 和 AGENT_DATA_DIR",
     )
     parser.add_argument("--data-dir", type=Path, help="法律索引和下载缓存目录")
     parser.add_argument("--model-dir", type=Path, help="重排模型目录")
@@ -52,7 +52,7 @@ def main() -> int:
     print(
         "models.json、mouldes.json、secrets.json、permissions.json 已就绪；已有配置保留。"
     )
-    print("模型 API Key 可随后通过网页设置或 agent100 config 填写。")
+    print("模型 API Key 可随后通过网页设置填写。")
     if args.laws or args.reranker:
         from ai_agent_learning.initialize_resources import (
             ResourceInitializationError,

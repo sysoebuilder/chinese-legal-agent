@@ -74,15 +74,15 @@ async def discard_cancelled_checkpoint(
             None,
         )
     if not owner_id or owner_id == row["run_id"]:
-        raise RuntimeError("该会话有未恢复的终端任务，请先在终端完成或使用新会话")
+        raise RuntimeError("无法确认会话待执行断点的运行状态，请检查恢复状态或新建会话")
     try:
         owner = await asyncio.to_thread(store.get, owner_id)
     except RunNotFound:
         raise RuntimeError(
-            "该会话有未恢复的终端任务，请先在终端完成或使用新会话"
+            "无法确认会话待执行断点的运行状态，请检查恢复状态或新建会话"
         ) from None
     if owner["thread_id"] != row["thread_id"] or owner["status"] != "cancelled":
-        raise RuntimeError("该会话有未恢复的终端任务，请先在终端完成或使用新会话")
+        raise RuntimeError("无法确认会话待执行断点的运行状态，请检查恢复状态或新建会话")
 
     # 使用旧 checkpoint 的配置，避免把新运行标记为已经开始。
     # END 只清除待执行任务，不删除历史，也不执行旧断点或批准工具。

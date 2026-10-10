@@ -14,7 +14,6 @@ from ai_agent_learning.paths import get_data_dir
 
 from .schema import (
     APPConfig,
-    ModelEntry,
     ModelsConfig,
     MouldesConfig,
     PermissionsConfig,
@@ -31,7 +30,7 @@ SECTIONS = {
 
 
 def config_dir() -> Path:
-    configured = os.getenv("LLM_CLI_CONFIG_DIR")
+    configured = os.getenv("AGENT_CONFIG_DIR")
     return Path(configured).expanduser().resolve() if configured else get_data_dir()
 
 
@@ -220,23 +219,6 @@ class ConfigStore:
             setattr(current, field, updated)
             return current
 
-    def save_model(self, model, *, activate: bool = True) -> Path:
-        model.validate()
-        with self._locked():
-            config = self._load()
-            key_ref = "ZAI_API_KEY" if model.provider == "glm" else "DEEPSEEK_API_KEY"
-            config.secretsconfig.keys[key_ref] = SecretStr(model.api_key)
-            config.modelconfig.models[model.provider] = ModelEntry(
-                provider=model.provider,
-                model=model.model,
-                base_url=model.base_url,
-                api_key_ref=key_ref,
-            )
-            if activate:
-                config.modelconfig.active = model.provider
-            self._write("secrets", config.secretsconfig)
-            self._write("models", config.modelconfig)
-        return self.directory / "models.json"
 
 
 def load_app_config() -> APPConfig:

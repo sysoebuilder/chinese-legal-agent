@@ -1,6 +1,6 @@
 # 应用配置
 
-终端聊天与 API 启动时读取四个 JSON 文件并创建 `APPConfig`：
+API 与 Worker 启动时读取四个 JSON 文件并创建 `APPConfig`：
 
 | 文件 | APPConfig 字段 | 用途 |
 | --- | --- | --- |
@@ -9,7 +9,7 @@
 | `secrets.json` | `secretsconfig` | 模型和插件所用的 Key |
 | `permissions.json` | `permissionsconfig` | Agent 工具审批模式 |
 
-默认目录为项目的 `data/`，可通过 `LLM_CLI_DATA_DIR` 修改默认数据目录，或用 `LLM_CLI_CONFIG_DIR` 单独指定配置目录。Compose 将主机 `data/` 挂载为 `/app/config`，API 和 Worker 共用配置文件。
+默认目录为项目的 `data/`，可通过 `AGENT_DATA_DIR` 修改默认数据目录，或用 `AGENT_CONFIG_DIR` 单独指定配置目录。Compose 将主机 `data/` 挂载为 `/app/config`，API 和 Worker 共用配置文件。
 
 首次加载创建缺少的文件。四个文件都不存在时，自动迁移同目录的 `.env` 和 `active-model.env`，保留旧文件；此后模型设置以 JSON 为准。数据库、Redis、Qdrant 等部署参数仍从环境变量或 `.env` 读取。无效 JSON 会报错，不会被默认值覆盖。
 
@@ -24,7 +24,7 @@ docker compose build initialize
 docker compose run --rm initialize
 ```
 
-本机 `data/` 挂载到容器 `/app/config`。初始化会创建缺少的 `models.json`、`mouldes.json`、`secrets.json`、`permissions.json`，保留已有文件及旧配置迁移行为；重复执行不会重置模型、插件、密钥或权限。无效 JSON 或目录不可写时以非零状态退出，日志不输出凭据。没有旧配置时，密钥文件为空，可随后通过网页设置或 `agent100 config` 填写。
+本机 `data/` 挂载到容器 `/app/config`。初始化会创建缺少的 `models.json`、`mouldes.json`、`secrets.json`、`permissions.json`，保留已有文件及旧配置迁移行为；重复执行不会重置模型、插件、密钥或权限。无效 JSON 或目录不可写时以非零状态退出，日志不输出凭据。没有旧配置时，密钥文件为空，可随后通过网页设置填写。
 
 配置初始化后依次检查法律资源和重排模型：
 
@@ -59,7 +59,7 @@ Compose 初始化新插件配置时，将 Windows MCP 地址设为 `http://host.
 
 ## 模型与凭据
 
-运行 `agent100 config` 可选择 GLM 或 DeepSeek、隐藏输入 Key 并填写模型名称。保存时模型写入 `models.json`，Key 写入 `secrets.json`，不再生成包含 Key 的模型快照。默认模型分别为 `GLM-5.3-flash` 和 `deepseek-flash`；模型名称不做远程可用性验证。
+通过网页的模型设置选择 GLM 或 DeepSeek、填写 Key 与模型名称。保存时模型写入 `models.json`，Key 写入 `secrets.json`，不生成包含 Key 的模型快照。默认模型分别为 `GLM-5.3-flash` 和 `deepseek-flash`；模型名称不做远程可用性验证。
 
 `models.json` 示例：
 

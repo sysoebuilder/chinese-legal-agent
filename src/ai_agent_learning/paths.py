@@ -15,7 +15,7 @@ def find_project_root() -> Path:
 
 def get_data_dir() -> Path:
     """默认使用当前项目的 data 目录，并允许环境变量覆盖。"""
-    configured = os.getenv("LLM_CLI_DATA_DIR")
+    configured = os.getenv("AGENT_DATA_DIR")
 
     if configured:
         data_dir = Path(configured).expanduser().resolve()

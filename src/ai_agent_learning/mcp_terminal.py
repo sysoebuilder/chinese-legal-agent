@@ -253,11 +253,11 @@ def serve(port: int, *, configure: bool = False) -> None:
 
 
 def manage(action: str, port: int, project_name: str, service: str) -> None:
-    """普通 CLI 和 Compose 共用同一套进程管理与状态文件。"""
+    """手动启动与 Compose 共用同一套进程管理与状态文件。"""
     if not all(re.fullmatch(r"[a-z0-9][a-z0-9_-]*", name) for name in [project_name, service]):
         raise ValueError("不支持的项目或服务名称")
     os.chdir(PROJECT_ROOT)
-    os.environ["LLM_CLI_DATA_DIR"] = str(PROJECT_ROOT / "data")
+    os.environ["AGENT_DATA_DIR"] = str(PROJECT_ROOT / "data")
     directory = PROJECT_ROOT / "data" / "compose-mcp"
     directory.mkdir(parents=True, exist_ok=True)
     state = directory / f"{project_name}-{service}.json"

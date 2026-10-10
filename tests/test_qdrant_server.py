@@ -16,7 +16,7 @@ async def test_qdrant_check_never_creates_a_native_database(monkeypatch, tmp_pat
         raise httpx.ConnectError("offline", request=request)
 
     monkeypatch.setenv("QDRANT_URL", "http://qdrant:6333")
-    monkeypatch.setenv("LLM_CLI_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("AGENT_DATA_DIR", str(tmp_path))
     monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: original_client(
         **kwargs, transport=httpx.MockTransport(respond)
     ))
@@ -31,20 +31,17 @@ async def test_qdrant_check_never_creates_a_native_database(monkeypatch, tmp_pat
 
 
 def test_configuration_directory_is_independent_from_database_data(monkeypatch, tmp_path):
-    from ai_agent_learning.model_config import (
-        active_config_path,
-        create_model_config,
-        load_active_model,
-        save_active_model,
-        source_config_path,
-    )
+    from ai_agent_learning.config import ConfigStore
+    from ai_agent_learning.model_config import source_config_path
 
     configured = tmp_path / "config"
-    monkeypatch.setenv("LLM_CLI_CONFIG_DIR", str(configured))
-    monkeypatch.setenv("LLM_CLI_DATA_DIR", str(tmp_path / "database-data"))
-    config = create_model_config("deepseek", "test-key")
-    save_active_model(config)
-    assert load_active_model() == config
-    assert active_config_path() == configured / "active-model.env"
+    monkeypatch.setenv("AGENT_CONFIG_DIR", str(configured))
+    monkeypatch.setenv("AGENT_DATA_DIR", str(tmp_path / "database-data"))
+    store = ConfigStore()
+    store.update("secrets", {"keys": {"DEEPSEEK_API_KEY": "test-key"}})
+    config = store.update("models", {"active": "deepseek"})
+    assert config.active_model().provider == "deepseek"
+    assert config.active_model().api_key == "test-key"
+    assert (configured / "models.json").exists()
     assert source_config_path() == configured / ".env"
     assert not (tmp_path / "database-data").exists()

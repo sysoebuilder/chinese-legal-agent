@@ -33,7 +33,7 @@ print(json.dumps([name for name in unrelated if name in sys.modules]))
 def test_background_allows_service_to_become_ready_after_twenty_seconds(tmp_path, monkeypatch):
     data = tmp_path / "data"
     data.mkdir()
-    monkeypatch.setenv("LLM_CLI_DATA_DIR", str(data))
+    monkeypatch.setenv("AGENT_DATA_DIR", str(data))
     monkeypatch.setenv("WINDOWS_MCP_TOKEN", "slow-start-test-token")
     monkeypatch.setattr(terminal, "PROJECT_ROOT", tmp_path)
     clock = [0.0]
@@ -64,7 +64,7 @@ def test_background_up_is_idempotent_and_down_cleans_process(tmp_path, monkeypat
     data.mkdir()
     config = data / ".env"
     config.write_text("CHECKPOINT_DATABASE_URL=postgresql://keep:unchanged@localhost/test\n", encoding="utf-8")
-    monkeypatch.setenv("LLM_CLI_DATA_DIR", str(data))
+    monkeypatch.setenv("AGENT_DATA_DIR", str(data))
     monkeypatch.setenv("WINDOWS_MCP_TOKEN", "lifecycle-test-token")
     monkeypatch.setattr(terminal, "PROJECT_ROOT", tmp_path)
     with socket.socket() as listener:
@@ -113,7 +113,7 @@ def test_background_does_not_claim_reused_or_unrelated_pid(tmp_path):
 def test_mcp_survives_start_command_exiting(tmp_path, monkeypatch):
     data = tmp_path / "data"
     data.mkdir()
-    monkeypatch.setenv("LLM_CLI_DATA_DIR", str(data))
+    monkeypatch.setenv("AGENT_DATA_DIR", str(data))
     monkeypatch.setenv("WINDOWS_MCP_TOKEN", "launcher-test-token")
     monkeypatch.setattr(terminal, "PROJECT_ROOT", tmp_path)
     with socket.socket() as listener:

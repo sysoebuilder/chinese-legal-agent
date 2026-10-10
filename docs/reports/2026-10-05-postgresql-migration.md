@@ -19,16 +19,13 @@
 
 **PostgreSQL 承担聊天的关系数据与运行状态；当前 Qdrant 服务继续承担法规和长期记忆的向量检索。** 本次没有将向量检索改写为 PostgreSQL/pgvector，也没有删除当前 Qdrant 服务的数据目录。
 
-法规安装器中的 `laws-install-payloads.sqlite3` 仍是安装过程中整理原始 payload 的临时缓存，相关逻辑位于 [law_install.py](/E:/ai-agent-100-days-learning/src/ai_agent_learning/law_install.py)。它不参与日常聊天的会话、日志或 checkpoint 存储，本次没有改写法规安装流程。
 
 ## 2. 文件修改清单
 
 | 文件 | 修改内容 |
 | --- | --- |
 | [checkpoint.py](/E:/ai-agent-100-days-learning/src/ai_agent_learning/langchain_agent/checkpoint.py) | 保留 PostgreSQL saver 和 Windows 线程适配；移除 SQLite checkpoint 探测与回退；简化 `open_checkpointer` 参数 |
-| [session.py](/E:/ai-agent-100-days-learning/src/ai_agent_learning/langchain_agent/session.py) | 将 SQLite 会话存储改为 PostgreSQL，增加独立连接上下文管理器 |
 | [logging_config.py](/E:/ai-agent-100-days-learning/src/ai_agent_learning/logging_config.py) | 替换日志数据库驱动，保留后台队列写入，改用 JSONB 保存日志详细内容 |
-| [run.py](/E:/ai-agent-100-days-learning/src/ai_agent_learning/langchain_agent/run.py) | 调整配置读取、业务表升级、日志初始化和数据库资源生命周期 |
 | [database.py](/E:/ai-agent-100-days-learning/src/ai_agent_learning/database.py) | 新增连接配置校验、读取配置和 Alembic 程序化升级入口 |
 | [migrations/env.py](/E:/ai-agent-100-days-learning/src/ai_agent_learning/migrations/env.py) | 使用应用传入的 SQLAlchemy 连接执行迁移 |
 | [0001_sessions_logs.py](/E:/ai-agent-100-days-learning/src/ai_agent_learning/migrations/versions/0001_sessions_logs.py) | 新增会话表、日志表和对应索引的初始迁移 |
@@ -37,7 +34,6 @@
 | [.env.example](/E:/ai-agent-100-days-learning/.env.example) | 将连接串说明更新为 checkpoint、会话表和日志表共用的数据库 |
 | [README.md](/E:/ai-agent-100-days-learning/README.md) | 更新中英文存储说明、迁移命令、数据库启动方式和 Qdrant 数据位置 |
 | [test_checkpoint.py](/E:/ai-agent-100-days-learning/tests/test_checkpoint.py) | 移除旧 SQLite 恢复测试，验证 PostgreSQL 配置、资源释放及平台适配 |
-| [test_langchain_newchat.py](/E:/ai-agent-100-days-learning/tests/test_langchain_newchat.py) | 更新聊天资源模拟，验证退出前不创建会话及连接关闭顺序 |
 | [test_postgres_storage.py](/E:/ai-agent-100-days-learning/tests/test_postgres_storage.py) | 新增真实 PostgreSQL 迁移、会话、日志和 checkpoint 集成测试 |
 
 [start-postgres.ps1](/E:/ai-agent-100-days-learning/scripts/start-postgres.ps1) 和 [stop-postgres.ps1](/E:/ai-agent-100-days-learning/scripts/stop-postgres.ps1) 是此前安装本地 PostgreSQL 时已添加的脚本，本轮继续使用。
@@ -313,9 +309,3 @@ checkpoint 中部分内容使用框架序列化格式，查看完整对话状态
 数据库不可用时不会回退到 SQLite。日志队列是进程内队列，突然终止进程可能丢失尚未写入的日志；当前没有补偿或自动重试。
 
 本次完成的是存储实现和表结构管理切换，没有增加用户权限体系、日志保留策略、连接池配置或数据库备份机制。现有 Qdrant 法规检索、记忆流程和用户故意设置的工具审批配置保持原有行为。
-
-## 13. SQL 查询类型提示的补充修正
-
-根据编辑器的 Pylance 提示，将 `PostgresSessionStore._execute()` 的 `query` 参数从 `str` 改为 `typing.LiteralString`。项目中的调用均传入代码内写好的 SQL 字面量，与 Psycopg `cursor.execute()` 的查询类型要求相符；会话名称和 ID 等数据仍通过 `%s` 参数传递。
-
-此次只修改类型声明，查询行为和表结构没有变化。补充执行真实 PostgreSQL 会话创建、改名、更新时间、排序和重连读取测试，结果为 **1 项通过**；`git diff --check` 无差异格式错误。未运行独立 Pylance/Pyright 静态检查器。

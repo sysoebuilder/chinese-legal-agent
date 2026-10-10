@@ -18,7 +18,6 @@ from psycopg.conninfo import make_conninfo
 
 from ai_agent_learning.database import migrate_database
 from ai_agent_learning.langchain_agent.checkpoint import open_checkpointer
-from ai_agent_learning.langchain_agent.session import open_session_store
 from ai_agent_learning.logging_config import configure_logging, shutdown_logging
 
 
@@ -54,23 +53,6 @@ def test_migration_is_repeatable_and_creates_native_types(database_url):
         assert connection.execute("SELECT count(*) FROM sessions").fetchone() == (0,)
 
 
-def test_session_changes_survive_reconnect_and_sort_by_last_update(database_url):
-    async def scenario():
-        async with open_session_store(database_url) as store:
-            first = await store.create_session()
-            second = await store.create_session()
-            title = "中文会话 '); DROP TABLE sessions; --"
-            await store.update_name(first, "  " + title + "  ")
-            await store.touch(first)
-            assert first.name == title
-        async with open_session_store(database_url) as store:
-            sessions = await store.list_sessions()
-            assert [item.thread_id for item in sessions] == [first.thread_id, second.thread_id]
-            assert sessions[0].name == title
-            assert sessions[0].updated_at == first.updated_at
-    asyncio.run(scenario())
-
-
 def test_queued_logs_flush_json_fields_and_exceptions(database_url):
     root = logging.getLogger()
     original_handlers = root.handlers[:]
@@ -102,7 +84,7 @@ def test_queued_logs_flush_json_fields_and_exceptions(database_url):
         root.setLevel(original_level)
 
 
-def test_session_thread_restores_checkpoint_and_pending_interrupt(database_url):
+def test_thread_restores_checkpoint_and_pending_interrupt(database_url):
     class State(TypedDict):
         value: int
 
@@ -116,15 +98,11 @@ def test_session_thread_restores_checkpoint_and_pending_interrupt(database_url):
     builder.add_edge("approve", END)
 
     async def scenario():
-        async with open_session_store(database_url) as store:
-            session = await store.create_session()
-        config = {"configurable": {"thread_id": session.thread_id}}
+        config = {"configurable": {"thread_id": str(uuid4())}}
         async with open_checkpointer(database_url) as saver:
             graph = builder.compile(checkpointer=saver)
             await graph.ainvoke({"value": 1}, config)
             assert (await graph.aget_state(config)).next == ("approve",)
-        async with open_session_store(database_url) as store:
-            assert (await store.list_sessions())[0].thread_id == session.thread_id
         async with open_checkpointer(database_url) as saver:
             graph = builder.compile(checkpointer=saver)
             assert (await graph.aget_state(config)).values == {"value": 1}
