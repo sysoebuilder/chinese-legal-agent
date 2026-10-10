@@ -1,0 +1,18 @@
+# 初始化独立于 API/Worker 镜像；下载资源不安装 CUDA 或加载模型。
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONPATH=/app/src \
+    LLM_CLI_CONFIG_DIR=/app/config \
+    HF_HUB_DOWNLOAD_TIMEOUT=120 \
+    HF_HUB_ETAG_TIMEOUT=30
+
+WORKDIR /app
+RUN --mount=type=cache,target=/root/.cache/pip python -m pip install \
+    "pydantic>=2.13,<3" "python-dotenv>=1.2,<2" \
+    "httpx>=0.28,<1" "huggingface-hub>=1.5,<2"
+COPY src ./src
+
+CMD ["python", "-m", "ai_agent_learning.initialize"]

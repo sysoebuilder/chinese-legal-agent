@@ -14,13 +14,13 @@ x-agent: &agent
     QDRANT_URL: http://qdrant:6333
   volumes:
     - app-data:/app/data
-    # 开发源码只读挂载；数据库和索引仍全部使用命名卷。
-    - ./src/ai_agent_learning:/app/src/ai_agent_learning:ro
     # 主机目录仅提供模型与工具配置；数据库、索引和安装缓存写入命名卷。
     - ./data:/app/config
     - ./models:/app/models:ro
     - law-assets:/app/laws:ro
   depends_on:
+    initialize:
+      condition: service_completed_successfully
     postgres:
       condition: service_healthy
     redis:
@@ -29,13 +29,37 @@ x-agent: &agent
       condition: service_healthy
 
 services:
+  # 一次性初始化配置、法律快照/BM25 和重排模型，不依赖宿主终端 MCP。
+  initialize:
+    build:
+      context: .
+      dockerfile: Dockerfile.init
+    image: agent100-init:local
+    init: true
+    restart: "no"
+    environment:
+      LLM_CLI_CONFIG_DIR: /app/config
+      LLM_CLI_DATA_DIR: /app/data
+      QDRANT_URL: http://qdrant:6333
+      LAWS_INIT_ENABLED: "true"
+      RERANKER_INIT_ENABLED: "true"
+      # 新配置提前启用宿主终端连接；Token 在 provider 启动后从 .env 读取。
+      WINDOWS_MCP_URL: http://host.docker.internal:${WINDOWS_MCP_PORT:-8766}/mcp
+    volumes:
+      - ./data:/app/config
+      - app-data:/app/data
+      - ./models:/app/models
+    depends_on:
+      qdrant:
+        condition: service_healthy
+
   # 此入口调用 mcp_terminal.py 的 compose 模式，在 Windows 宿主机运行服务。
   windows_terminal:
     provider:
       # Windows 上 Compose 自动追加 .exe。
       type: ./.venv/Scripts/agent100-mcp-provider
       options:
-        port: 8765
+        port: ${WINDOWS_MCP_PORT:-8766}
 
   frontend:
     build: ./frontend
@@ -68,6 +92,8 @@ services:
   worker:
     <<: *agent
     depends_on:
+      initialize:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:

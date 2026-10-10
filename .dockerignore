@@ -1,6 +1,7 @@
 # 只发送构建所需文件，排除凭据、数据库、模型和 Windows 可执行文件。
 **
 !Dockerfile
+!Dockerfile.init
 !pyproject.toml
 !README.md
 !src/
