@@ -5,6 +5,7 @@ import os
 from contextlib import AsyncExitStack, asynccontextmanager
 
 import httpx
+import httpx2
 
 from ai_agent_learning.api.errors import WindowsTerminalUnavailable
 from ai_agent_learning.config import (
@@ -46,6 +47,21 @@ def resolve_model(public_config: dict[str, str], app_config: APPConfig | None = 
 
 
 @asynccontextmanager
+async def open_worker_model(config: ModelConfig):
+    """每次任务独立持有模型连接，在 asyncio.run 关闭事件循环前释放。"""
+    if config.provider != "deepseek":
+        yield create_langchain_model(config)
+        return
+    # LangChain 默认会缓存 HTTP 客户端；Celery 每次任务创建的新事件循环
+    # 不能复用上一次循环的连接池，聊天和记忆模型也各自持有连接。
+    async with httpx2.AsyncClient(timeout=30) as async_client:
+        with httpx2.Client(timeout=30) as client:
+            yield create_langchain_model(
+                config, http_client=client, http_async_client=async_client,
+            )
+
+
+@asynccontextmanager
 async def open_worker_agent(database_url: str, public_config: dict[str, str]):
     # worker 之间共享的 Qdrant 应作为独立服务运行，不能在每个任务退出时关闭。
     qdrant_url = os.getenv("QDRANT_URL", DEFAULT_QDRANT_URL).rstrip("/")
@@ -71,10 +87,11 @@ async def open_worker_agent(database_url: str, public_config: dict[str, str]):
             if "windows_terminal" in connections.errors:
                 raise WindowsTerminalUnavailable()
             tools = connections.tools
-        model = create_langchain_model(config)
+        model = await stack.enter_async_context(open_worker_model(config))
+        memory_model = await stack.enter_async_context(open_worker_model(config))
         memory_queue: asyncio.Queue[MemoryTurn] = asyncio.Queue()
         memory_worker = MemoryWorker(
-            memory_queue, create_langchain_model(config), config.model
+            memory_queue, memory_model, config.model
         )
         stack.push_async_callback(memory_worker.close)
         memory_worker.start()

@@ -46,7 +46,9 @@ SYSTEM_PROMPT = """
 """.strip()
 
 
-def create_langchain_model(config: ModelConfig) -> BaseChatModel:
+def create_langchain_model(
+    config: ModelConfig, *, http_client: Any = None, http_async_client: Any = None,
+) -> BaseChatModel:
     """根据当前提供商创建对应的 LangChain 模型适配器。"""
     if config.provider == "glm":
         api_base = config.base_url.rstrip("/")
@@ -72,6 +74,10 @@ def create_langchain_model(config: ModelConfig) -> BaseChatModel:
             "max_retries": 2,
             "extra_body": {"thinking": {"type": "enabled"}},
         }
+        if http_client is not None:
+            options["http_client"] = http_client
+        if http_async_client is not None:
+            options["http_async_client"] = http_async_client
         return ChatDeepSeek(**options)
 
     raise ValueError(f"不支持的模型提供商：{config.provider}")

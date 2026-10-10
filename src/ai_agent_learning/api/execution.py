@@ -3,12 +3,16 @@
 import asyncio
 import time
 from collections.abc import Iterator
+from contextlib import aclosing
 from typing import Any
 
 from langchain_core.callbacks import AsyncCallbackHandler
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
+from langgraph.graph import END
 from langgraph.types import Command
+
+from ai_agent_learning.api.store import RunNotFound
 
 
 class RunCancelled(asyncio.CancelledError):
@@ -50,6 +54,69 @@ def checkpoint_started(snapshot, row: dict[str, Any]) -> bool:
         message.id == f"run:{row['run_id']}:user"
         for message in snapshot.values.get("messages", [])
     )
+
+
+async def discard_cancelled_checkpoint(
+    agent, store, snapshot, row
+) -> list[ToolMessage]:
+    """在会话锁内结束已取消运行的旧任务，保留消息与已保存的工具结果。"""
+    owner_id = (snapshot.metadata or {}).get("run_id")
+    if not owner_id:
+        owner_id = next(
+            (
+                message.id[4:-5]
+                for message in reversed(snapshot.values.get("messages", []))
+                if isinstance(message, HumanMessage)
+                and message.id
+                and message.id.startswith("run:")
+                and message.id.endswith(":user")
+            ),
+            None,
+        )
+    if not owner_id or owner_id == row["run_id"]:
+        raise RuntimeError("该会话有未恢复的终端任务，请先在终端完成或使用新会话")
+    try:
+        owner = await asyncio.to_thread(store.get, owner_id)
+    except RunNotFound:
+        raise RuntimeError(
+            "该会话有未恢复的终端任务，请先在终端完成或使用新会话"
+        ) from None
+    if owner["thread_id"] != row["thread_id"] or owner["status"] != "cancelled":
+        raise RuntimeError("该会话有未恢复的终端任务，请先在终端完成或使用新会话")
+
+    # 使用旧 checkpoint 的配置，避免把新运行标记为已经开始。
+    # END 只清除待执行任务，不删除历史，也不执行旧断点或批准工具。
+    cleared_config = await agent.aupdate_state(snapshot.config, None, as_node=END)
+    cleared = await agent.aget_state(cleared_config)
+    if cleared.next or cleared.interrupts:
+        raise RuntimeError("已取消运行的待执行节点尚未清理完成")
+    return cancelled_tool_results(cleared)
+
+
+def cancelled_tool_results(snapshot) -> list[ToolMessage]:
+    """补齐停止时未保存的工具结果，使下一轮模型输入保持完整。"""
+    messages = snapshot.values.get("messages", [])
+    answered = {
+        message.tool_call_id for message in messages if isinstance(message, ToolMessage)
+    }
+    missing = []
+    for message in messages:
+        if not isinstance(message, AIMessage):
+            continue
+        for call in message.tool_calls:
+            if call["id"] in answered:
+                continue
+            missing.append(
+                ToolMessage(
+                    content="此工具调用随运行停止，结果未保存；不能假定操作已完成。",
+                    tool_call_id=call["id"],
+                    name=call["name"],
+                    status="error",
+                    id=f"cancelled-tool:{call['id']}",
+                )
+            )
+            answered.add(call["id"])
+    return missing
 
 
 def final_answer(snapshot) -> str:
@@ -150,31 +217,43 @@ async def execute_agent(
         # 图已完成但 worker 未来得及标记 succeeded，不重复调用模型。
         await save_result(store, row, snapshot)
         return
-    if not started and snapshot.next:
-        raise RuntimeError("该会话有未恢复的终端任务，请先在终端完成或使用新会话")
+    stopped_tool_results = []
+    if not started and (snapshot.next or cancelled_tool_results(snapshot)):
+        # 清理节点后、提交新消息前退出，也必须在重试时补齐工具结果。
+        stopped_tool_results = await discard_cancelled_checkpoint(
+            agent, store, snapshot, row
+        )
 
     agent_input = None
     if not started:
         agent_input = {
-            "messages": [HumanMessage(content=row["message"], id=user_message_id)]
+            "messages": [
+                *stopped_tool_results,
+                HumanMessage(content=row["message"], id=user_message_id),
+            ]
         }
     elif interrupts:
         agent_input = Command(resume=responses)
 
     seen_tools: set[str] = set()
-    async for part in agent.astream(
-        agent_input,
-        config=config,
-        stream_mode=["messages", "values"],
-        subgraphs=True,
-        version="v2",
-    ):
-        await guard.check()
-        if part["type"] != "messages":
-            continue
-        message, metadata = part["data"]
-        for event, data in message_events(message, metadata, generation, seen_tools):
-            await asyncio.to_thread(event_bus.publish, run_id, event, data)
+    async with aclosing(
+        agent.astream(
+            agent_input,
+            config=config,
+            stream_mode=["messages", "values"],
+            subgraphs=True,
+            version="v2",
+        )
+    ) as parts:
+        async for part in parts:
+            await guard.check()
+            if part["type"] != "messages":
+                continue
+            message, metadata = part["data"]
+            for event, data in message_events(
+                message, metadata, generation, seen_tools
+            ):
+                await asyncio.to_thread(event_bus.publish, run_id, event, data)
 
     await guard.check(force=True)
     snapshot = await agent.aget_state(config)

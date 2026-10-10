@@ -416,6 +416,55 @@ def test_reconnect_restores_checkpoint_interrupt_without_approving_it(store):
     assert calls == ["first", decision]
 
 
+def test_cancelled_checkpoint_allows_retry_of_new_run_without_old_tool_execution(store):
+    from langchain_core.messages import AIMessage, HumanMessage
+    from langgraph.graph import END, START, MessagesState, StateGraph
+    from langgraph.types import interrupt
+
+    from ai_agent_learning.api.worker import execute_run
+
+    effects = []
+
+    def first(state):
+        return {}
+
+    def answer(state):
+        if state["messages"][-1].content == "old":
+            interrupt({"action_requests": [{"name": "send_email", "args": {}}]})
+            effects.append("old-tool")
+        else:
+            effects.append("new-answer")
+        return {"messages": [AIMessage(content="new answer")]}
+
+    graph = StateGraph(MessagesState)
+    graph.add_node("legal_flow", first)
+    graph.add_node("general_agent", answer)
+    graph.add_edge(START, "legal_flow")
+    graph.add_edge("legal_flow", "general_agent")
+    graph.add_edge("general_agent", END)
+    factory = checkpoint_factory(graph)
+    old = store.create("old", None, MODEL)
+    execute_run(store, old["run_id"], 1, factory)
+    assert store.get(old["run_id"])["status"] == "waiting_approval"
+    store.cancel(old["run_id"])
+    new = store.create("new", old["thread_id"], MODEL)
+    store.begin(new["run_id"], 1)
+    store.finish(new["run_id"], 1, "failed", {"error": "RuntimeError"})
+    store.resume(new["run_id"], {})
+    execute_run(store, new["run_id"], 2, factory)
+    assert store.get(new["run_id"])["status"] == "succeeded"
+    assert store.get(new["run_id"])["answer"] == "new answer"
+    assert effects == ["new-answer"]
+
+    async def inspect():
+        async with factory(store.database_url, MODEL) as agent:
+            return await agent.aget_state({"configurable": {"thread_id": old["thread_id"]}})
+
+    snapshot = asyncio.run(inspect())
+    assert not snapshot.next and not snapshot.interrupts
+    assert [message.content for message in snapshot.values["messages"] if isinstance(message, HumanMessage)] == ["old", "new"]
+
+
 def test_reconnect_rejects_completed_missing_cancelled_or_other_run_checkpoint(store):
     graph = recovery_graph([])
     row = store.create("无断点", None, MODEL)
