@@ -62,6 +62,6 @@ docker compose -f compose.release.yaml up -d --wait
 
 配置和模型保存在本机 `data/`、`models/`，数据库、法律索引和队列保存在 Docker 命名卷。`down -v` 会删除命名卷中的数据，普通停止使用 `down`。
 
-发布版沿用源码版的 `agent100` 项目名和数据卷。已有源码版部署时，将发布版文件放到原项目目录中使用，以复用原来的配置、模型和数据；两种 Compose 文件用于同一套服务。
+发布版项目名为 `chinese-legal-agent`，数据卷名称均以 `chinese-legal-agent_` 开头。
 
 该文件固定使用 `0.5.0`，不会随 `latest` 自动升级。后续升级时，先备份数据，再将三个业务镜像的标签一起改为对应发布版本，并执行 `pull` 和 `up -d --wait`。
