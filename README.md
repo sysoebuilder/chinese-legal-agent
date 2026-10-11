@@ -1,149 +1,223 @@
-# agent100
+# 中国法律智能体
 
-**从模型 API 到工具调用：一个持续迭代的 Python Agent CLI。**  
-**From model APIs to tool use: an evolving Python Agent CLI.**
+**面向中国法律法规检索与案件分析的智能体，内置 703,271 条法律知识记录。**
 
-Version **0.4.1** · Python **3.11+** · Command **`agent100`**
+英文项目名：**Chinese Legal Agent** · 仓库名：`chinese-legal-agent`。
 
-[中文](#中文) · [English](#english)
+**必须配置智谱 API Key（`ZAI_API_KEY`）：本项目的向量化依赖智谱 GLM Embedding-3，无论对话使用 GLM 还是 DeepSeek，都需要该 Key。**
 
-## 中文
+## 快速运行
 
-### 项目与求职方向
+当前默认部署环境为 **Windows + Docker Desktop（Linux containers）+ NVIDIA GPU**。安装并启动 Docker Desktop（含 Docker Compose），确保容器能够使用 NVIDIA GPU。
 
-我正在寻找 **AI Agent / LLM 应用开发相关岗位**。agent100 是我的个人学习与求职作品，用来展示如何把模型 API 接入推进到可运行、可追踪、有执行边界的 Agent 应用。
+### 1. 下载发布版并启动
 
-项目随我的 100 天 Agent 学习计划迭代。核心循环、工具协议、失败恢复和上下文管理使用 Python 显式实现，便于阅读代码和讨论工程取舍。目前是持续迭代的个人项目，尚未进行生产环境验证。
+发布版直接使用 Docker Hub 的三个 `sysoe/chinese-legal-agent*:0.5.0` 镜像，无需安装 Git、Python、Node.js 或在本机构建。
 
-如果你正在招聘 Agent 开发者，欢迎通过邮箱 [1774364027w@gmail.com](mailto:1774364027w@gmail.com) 联系我，也可以访问 [GitHub 个人主页](https://github.com/sysoebuilder) 或在本仓库发起技术交流。我希望围绕工具调用、工作流编排和 LLM 应用可靠性开展工作。
+在 PowerShell 中执行：
 
-### 已实现的能力
+```powershell
+New-Item -ItemType Directory -Path chinese-legal-agent -Force | Out-Null
+Set-Location chinese-legal-agent
+Invoke-WebRequest -Uri https://raw.githubusercontent.com/sysoebuilder/chinese-legal-agent/v0.5.0/compose.release.yaml -OutFile compose.release.yaml
+docker compose -f compose.release.yaml pull
+docker compose -f compose.release.yaml up -d --wait
+```
 
-| 能力 | 实现内容 |
+详见 [发布版部署说明](docs/dockerhub-release.md)。
+
+需要从源码构建时，先安装 Git，再执行：
+
+在 PowerShell 中执行：
+
+```powershell
+git clone https://github.com/sysoebuilder/chinese-legal-agent.git
+cd chinese-legal-agent
+.\scripts\start-compose.ps1
+```
+
+源码启动脚本构建并启动前端、API、Worker、PostgreSQL、Redis、Qdrant 和初始化服务，无需安装宿主机 Python。API 与 Worker 使用镜像内的源码，不挂载主机 `src`。
+
+首次启动时，初始化容器自动创建配置、从 GitHub Release 下载并恢复法律库及 BM25 索引、从 Hugging Face 下载 BGE 重排模型。已有完整资源会跳过；初始化不需要模型 API Key，API 和 Worker 在初始化成功后启动。发布版需要访问 Docker Hub、GitHub Release 与 Hugging Face；源码构建还需要访问 PyPI 与 PyTorch 下载源。
+
+查看初始化进度时，另开终端，在项目目录执行：
+
+```powershell
+docker compose -f compose.release.yaml logs -f initialize
+```
+
+### 2. 打开网页并配置模型
+
+访问 **[http://127.0.0.1:3000](http://127.0.0.1:3000)**，打开左下角设置：
+
+1. 在“模型”中选择 GLM 或 DeepSeek，填写 API Key 并保存。
+2. **必须配置智谱 API Key（`ZAI_API_KEY`）**。法律语义检索和长期记忆的向量化依赖智谱 GLM Embedding-3，联网搜索也使用智谱服务；使用 DeepSeek 对话模型时同样必须配置该 Key。
+3. 在插件设置中确认法律流程已启用；在“权限”中可选择“限制”，让中、高、严重风险的工具调用经过人工确认。
+
+模型、密钥和权限均通过网页设置修改。当前默认权限模式为“无限制”。如果启用了 `AGENT_API_TOKEN`，在网页连接设置中填写相同的访问令牌。
+
+### 3. 开始法律对话
+
+提供具体事实、时间、地域和你的问题，例如：
+
+> 我在上海工作，公司在劳动合同到期前通知解除合同。我工作了三年，最近一年平均月工资为 12,000 元。解除理由是岗位调整。我可能有哪些权利，还需要补充哪些事实？
+
+Agent 会识别法律问题、梳理客观事实、检索可能适用的法律依据，并在事实不足时向你提问。补充信息提交成功后，中断面板收起，流程继续；工具审批通过“同意 / 拒绝”按钮完成。
+
+网页支持流式思考与回答、历史会话、停止生成和失败重试。停止完成后，可在原会话继续发送消息。
+
+| 入口 | 地址 |
 | --- | --- |
-| 多轮对话 | GLM / DeepSeek 流式输出、终端 Markdown 展示、本地会话保存与加载 |
-| Agent 循环 | 模型选择工具、执行工具、回传结果并继续推理；限制最大模型调用轮数 |
-| 工具系统 | 统一描述、注册表、调用与结果结构；JSON Schema 参数校验 |
-| 内置工具 | 当前时间、基于 GLM 搜索引擎的网络搜索、QQ SMTP 邮件发送、Windows PowerShell 命令执行 |
-| 执行控制 | 风险等级检查；聊天模式下，带副作用的工具执行前展示参数并请求确认 |
-| 失败恢复 | 区分临时失败、永久失败与结果未知，结合副作用和幂等能力决定是否重试 |
-| 上下文管理 | 增量估算 Token，达到阈值后请求精确计数，压缩旧消息并保留近期对话 |
-| 长期记忆 | 对话结束时提取用户信息与 AI 行为，使用 GLM Embedding-3 向量化并保存到本地 Qdrant；通过 `add`、`confirm`、`replace`、`ignore` 决策完成去重与更新 |
-| 记忆检索 | 模型在回答需要依赖以往记忆时调用工具，结合全局 `key` 精确查询与向量相似度查询返回相关记忆 |
-| 任务规划 | 结构化计划、工具与依赖校验、计划确认、步骤状态跟踪及结果保存 |
-| 工程基础 | 结构化日志、模块化代码、pytest 测试、wheel 与源码发行包构建 |
+| 网页 | [http://127.0.0.1:3000](http://127.0.0.1:3000) |
+| API 文档 | [http://127.0.0.1:8001/docs](http://127.0.0.1:8001/docs) |
 
-### 快速开始
+## 法律库与检索
 
-以下使用 Windows PowerShell。当前命令执行工具仅支持 Windows；工作目录不构成文件访问沙箱。
+当前默认法律发布包包含 **703,271 条法律知识记录**，保存在 Qdrant 的 `npc_laws` 集合中。这里的数量是知识库记录数，不代表独立法律文件的部数；初始化会核对集合数量和 BM25 索引完整性。
 
-```powershell
-git clone https://github.com/sysoebuilder/agent100.git
-cd agent100
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -e .
+检索根据争议点组织，支持两条路径：
+
+- **明确法规名称时**：使用 BM25 检索标题，再结合正文关键词筛选候选依据。
+- **尚不明确法规名称时**：使用 GLM Embedding-3 生成案情向量，在 Qdrant 中进行语义检索。
+
+候选结果使用本地 **BGE-reranker-v2-m3** 根据客观案情重排。多个争议点可以在一轮中并行检索；决策节点按证据缺口选择新的检索角度，避免反复搜索近义表述。
+
+默认资源来自固定版本的发布包，初始化不会自动追踪法规变更。法律适用时间和地域也是回答流程需要检查的内容。
+
+## 严谨的法律分析流程
+
+中国法律智能体将法律问题交给独立的 LangGraph 法律工作流，围绕事实和已检索依据组织结论。
+
+```mermaid
+flowchart LR
+    A[识别法律问题] --> B[梳理客观事实]
+    B --> C[审查事实与依据]
+    C -->|缺少事实| D[向用户补充询问]
+    D --> B
+    C -->|缺少依据| E[法律检索与重排]
+    E --> C
+    C -->|具备回答条件| F[最终回答前的充分性检查]
+    F -->|仍有缺口| C
+    F -->|通过| G[结合检索依据回答]
+    C -->|无法取得充分依据| H[说明不足并拒绝确定结论]
 ```
 
-首次运行 `agent100 config` 时，程序会自动检测配置：选择 GLM 或 DeepSeek，隐藏输入 API Key，再输入模型名称（回车使用默认名称）。服务地址使用内置默认值，无需填写。程序会创建 `data/.env` 并把当前选择写入 `data/active-model.env`。之后再次运行 `config` 可从已配置的提供商中切换模型。详见 [模型配置](docs/model-configuration.md)。
+| 环节 | 已实现的约束 |
+| --- | --- |
+| 案件识别 | 区分新案件、已有案件的追问与非法律问题，按案件保存事实和分析状态 |
+| 事实梳理 | 从用户陈述和补充信息中提取客观事实，提示模型不得猜测未提供的事实或预设结论 |
+| 依据选择 | 由决策节点选择可用的检索结果，缺少依据时继续检索 |
+| 补充询问 | 通过可持久化中断请求关键事实，收到回应后从 checkpoint 继续 |
+| 回答前检查 | 再次审查事实和依据是否足够，可退回补充询问、检索或拒绝回答 |
+| 回答生成 | 限定模型引用提供的法律依据，说明适用时间、地域和结论的不确定性 |
+| 失败处理 | 对可恢复错误进行有限重试；无法取得充分依据时明确说明原因 |
+
+这些约束由结构化状态、工作流路由和模型提示共同实现，方便检查案件分析过程与恢复中断任务。
+
+## 产品能力
+
+| 能力 | 实现 |
+| --- | --- |
+| 法律案件分析 | 多案件状态、事实整理、争议点检索、依据审查、补充询问与回答前检查 |
+| 网页对话 | React + TypeScript，流式思考与回答、历史分页、深浅主题、模型切换 |
+| 模型接入 | GLM / DeepSeek，可在网页设置模型与服务地址 |
+| 权限控制 | “限制 / 无限制”两档；限制模式下对中、高、严重风险工具展示参数并请求同意或拒绝 |
+| 中断与恢复 | PostgreSQL checkpoint、人工输入与工具审批、失败重试、停止后继续会话 |
+| 长期记忆 | 异步整理对话记忆，GLM Embedding-3 向量化，Qdrant 检索、去重和更新 |
+| 工具扩展 | 时间、联网搜索、邮件、记忆管理，以及本地与云端 MCP 连接 |
+| API | FastAPI 运行接口、SSE 事件、Redis + Celery 任务调度 |
+| 可观测性 | 结构化日志、节点耗时、运行状态、持久化会话与任务恢复信息 |
+
+## 部署与数据持久化
+
+发布版 `compose.release.yaml` 的项目名为 `chinese-legal-agent`，数据卷名称以 `chinese-legal-agent_` 开头。源码构建使用独立的 `compose.yaml`。
+
+发布版 API 和 Worker 共用 `sysoe/chinese-legal-agent:0.5.0` 镜像，前端使用 `sysoe/chinese-legal-agent-web:0.5.0`，初始化使用 `sysoe/chinese-legal-agent-init:0.5.0`。PostgreSQL、Redis 和 Qdrant 是独立服务。源码构建使用对应的 `:local` 镜像；修改代码后需要重新构建对应镜像并重新创建容器。
+
+当前部署的业务服务全部在容器中运行。Agent 不接入 Windows 终端 MCP，Compose 和启动脚本也不启动宿主机终端服务。详见 [部署说明](docs/run-api.md)。
+
+| 数据 | 持久化位置 |
+| --- | --- |
+| 模型、插件、密钥、权限配置 | 主机 `data/models.json`、`mouldes.json`、`secrets.json`、`permissions.json`，挂载到 `/app/config` |
+| 会话、运行状态、日志、checkpoint | Docker 卷 `chinese-legal-agent_postgres` |
+| 法律向量与长期记忆 | Docker 卷 `chinese-legal-agent_qdrant` |
+| BM25 索引与法律初始化缓存 | Docker 卷 `chinese-legal-agent_app-data`，容器路径 `/app/data` |
+| 队列持久化 | Docker 卷 `chinese-legal-agent_redis-data` |
+| 重排模型 | 主机 `models/bge-reranker-v2-m3`，Worker 只读挂载到 `/app/models` |
+| 可选法律离线资源 | Docker 卷 `chinese-legal-agent_law-assets` |
+
+常用运维命令：
 
 ```powershell
-.\.venv\Scripts\agent100.exe --version
-.\.venv\Scripts\agent100.exe config
-.\.venv\Scripts\agent100.exe chat
-.\.venv\Scripts\agent100.exe taskplan "搜索 Python 日志最佳实践并整理学习提纲"
+# 查看服务与日志
+docker compose -f compose.release.yaml ps -a
+docker compose -f compose.release.yaml logs -f api worker
+
+# 更新镜像并启动
+docker compose -f compose.release.yaml pull
+docker compose -f compose.release.yaml up -d --wait
+
+# 停止服务，保留持久化数据
+docker compose -f compose.release.yaml down
 ```
 
-Web Search 功能基于 GLM 搜索引擎实现，长期记忆使用 GLM Embedding-3 生成向量，两项功能都必须配置 GLM API Key（环境变量名为 `ZAI_API_KEY`）；即使当前对话模型选择 DeepSeek，该配置仍不可省略。邮件工具另需配置 `QQ_SMTP_USERNAME` 和 `QQ_SMTP_AUTH_CODE`，后者是 SMTP 授权码，不是邮箱登录密码。模型、搜索和向量化调用使用你自己的服务账号，可能产生费用。
+`docker compose down -v` 会删除命名卷中的数据库、索引和队列数据。备份命令为 `.\.venv\Scripts\python.exe scripts/backup-data.py`，备份保存在 `data/backups/<时间>/`；恢复步骤见 [部署与备份说明](docs/run-api.md#备份与恢复)。
 
-会话、日志、计划和 Qdrant 记忆库默认保存在本地 `data/`；可用 `LLM_CLI_DATA_DIR` 指定其他目录。输入 `exit` 或 `quit` 正常结束聊天时，程序会整理本次运行产生的对话并更新长期记忆。不要提交真实 `.env`、个人会话或记忆数据。
+邮件工具需要在密钥设置中填写 `QQ_SMTP_USERNAME` 和 `QQ_SMTP_AUTH_CODE`。启用哪些工具、连接哪些 MCP、采用哪档权限，均可在网页中配置。
 
-### 代码导航
+## API 与法律 MCP
+
+网页以 Run API 为基础，通过 SSE 接收实时事件。外部程序也可以创建运行、查询状态、响应中断和读取会话历史，详见 [Run API 使用说明](docs/run-api.md)。
+
+法律检索还提供独立的 MCP Server，暴露 `search_laws` 工具。在共享服务和初始化资源已就绪后，可通过 stdio 接入：
+
+```powershell
+docker compose -f compose.release.yaml run --rm -T --no-deps worker python -m chinese_legal_agent.mcp_server
+```
+
+需要 HTTP 接入时：
+
+```powershell
+docker compose -f compose.release.yaml run --rm --no-deps -p 127.0.0.1:8000:8000 worker python -m chinese_legal_agent.mcp_server --http --host 0.0.0.0 --port 8000
+```
+
+MCP 地址为 `http://127.0.0.1:8000/mcp`，当前独立法律 MCP 的 HTTP 入口不提供鉴权。法律 MCP 与网页共用 Qdrant 法律集合、BM25 索引和本地重排模型。
+
+## 代码与文档
 
 | 路径 | 内容 |
 | --- | --- |
-| `src/ai_agent_learning/agent/` | Agent 循环、状态、停止策略与上下文管理 |
-| `src/ai_agent_learning/tools/` | 工具协议、注册、执行与恢复策略 |
-| `src/ai_agent_learning/planning/` | 计划生成、校验、执行与持久化 |
-| `src/ai_agent_learning/memory/` | 候选记忆提取、向量化、旧记忆检索、决策及 Qdrant 持久化 |
-| `src/ai_agent_learning/model.py` | GLM、DeepSeek 模型 API 适配与流式生成 |
-| `src/ai_agent_learning/ui/` | 终端展示与工具确认 |
-| `tests/` | 模型适配、Agent、工具、运行时与终端相关测试 |
-| `docs/` | 实现说明与设计细节 |
+| `src/chinese_legal_agent/langchain_agent/legal/` | 法律工作流、案件状态、结构化决策与回答检查 |
+| `src/chinese_legal_agent/mcp_server/` | 法律检索与独立 MCP Server |
+| `src/chinese_legal_agent/law_index.py` | 法律 BM25 索引 |
+| `src/chinese_legal_agent/reranker.py` | 法律与记忆检索重排 |
+| `src/chinese_legal_agent/api/` | Run API、SSE、任务调度与 checkpoint 恢复 |
+| `src/chinese_legal_agent/config/` | 配置加载、旧配置迁移和原子更新 |
+| `src/chinese_legal_agent/initialize*.py` | 配置、法律快照、BM25 与重排模型初始化 |
+| `src/chinese_legal_agent/memory/` | 记忆提取、向量化、检索与持久化 |
+| `frontend/` | 网页界面 |
+| `tests/` | 工作流、接口、配置与恢复链路测试 |
 
-实现说明：[GLM 接入](docs/glm-model-client.md) · [搜索工具](docs/web-search.md) · [长期记忆](docs/memory-system.md) · [上下文估算](docs/context-token-estimation.md) · [终端界面](docs/terminal-ui.md)
+- [部署、接口与备份恢复](docs/run-api.md)
+- [模型、插件、密钥与权限配置](docs/model-configuration.md)
+- [前端开发说明](frontend/README.md)
 
-### 测试与打包
+版本 **0.5.0** · Python **3.11+** · LangChain / LangGraph · FastAPI / Celery · PostgreSQL / Redis / Qdrant
 
-```powershell
-.\.venv\Scripts\python.exe -m pip install pytest build
-.\.venv\Scripts\python.exe -m pytest tests
-.\.venv\Scripts\python.exe -m build
-```
+## 搜索关键词
 
-构建产物位于 `dist/`：`.whl` 用于安装，`.tar.gz` 为源码发行包。项目尚未提供独立 EXE。
+中国法律智能体、法律 AI 助手、中国法律法规、法律知识库、法律法规检索、法律依据检索、案件分析、法律 RAG、检索增强生成、混合检索、向量检索、BM25、重排模型、人工审批、MCP、LangGraph。
+
+Chinese Legal Agent, Chinese law, legal AI assistant, legal knowledge base, legal research, case analysis, legal RAG, retrieval-augmented generation, hybrid search, vector search, BM25, reranking, human-in-the-loop, MCP, LangGraph.
 
 ## English
 
-### Project and career interests
+**Chinese Legal Agent provides Chinese law retrieval and case analysis, backed by 703,271 legal knowledge records.** The count refers to indexed records, rather than distinct statutes.
 
-I am looking for **AI Agent / LLM application engineering roles**. agent100 is my personal learning and portfolio project, demonstrating the progression from a model API integration to a runnable agent with execution controls and traceable behavior.
+The legal workflow maintains case facts, retrieves and reranks candidate legal grounds, requests missing information, and reviews whether the evidence is sufficient before generating an answer. Generation is instructed to use the supplied legal grounds and explain uncertainty, time, and jurisdiction. The workflow can return to retrieval or decline a definitive conclusion when the available grounds are insufficient.
 
-The project evolves alongside my 100-day Agent learning plan. The agent loop, tool contracts, recovery policies, and context management are implemented explicitly in Python so that the code and engineering tradeoffs can be reviewed. This is an actively developed personal project; it has not been validated for production use.
+For the default Windows deployment, install Docker Desktop with Linux containers and Docker Compose, and an NVIDIA GPU with container support. Download `compose.release.yaml` and follow the [Docker Hub deployment guide](docs/dockerhub-release.md), then open [http://127.0.0.1:3000](http://127.0.0.1:3000) and configure the model in Settings. Source builds can use Git and `scripts/start-compose.ps1`. A GLM API key is required for semantic law retrieval and memory embeddings, including when DeepSeek is the chat model.
 
-If you are hiring Agent developers, please contact me at [1774364027w@gmail.com](mailto:1774364027w@gmail.com), visit my [GitHub profile](https://github.com/sysoebuilder), or start a technical discussion in this repository. My interests include tool use, workflow orchestration, and reliable LLM applications.
+Initialization restores missing law data and BM25 indexes from a fixed release and downloads the BGE reranker. Complete resources are reused. API and Worker run the source packaged in their image; the web UI serves built static assets. Windows terminal MCP is excluded from the Agent and Compose deployment. Configuration and model files use host mounts; database and index data persist in named Docker volumes.
 
-### Implemented features
-
-| Capability | Implementation |
-| --- | --- |
-| Multi-turn chat | GLM / DeepSeek streaming, terminal Markdown rendering, local session persistence and loading |
-| Agent loop | Model-selected tools, execution, result feedback, and a model-call limit |
-| Tool system | Shared specifications, registry, call/result contracts, and JSON Schema validation |
-| Built-in tools | Current time, GLM-powered web search, QQ SMTP email, and Windows PowerShell commands |
-| Execution controls | Risk checks; chat mode displays arguments and requests approval before side-effecting tools run |
-| Failure recovery | Transient, permanent, and unknown-outcome failures; retry decisions account for side effects and idempotency |
-| Context management | Incremental token estimates, threshold-triggered exact counting, and history compaction retaining recent messages |
-| Long-term memory | Extracts durable user information and AI actions when a chat ends, embeds content with GLM Embedding-3, stores it in local Qdrant, and applies `add`, `confirm`, `replace`, or `ignore` decisions for updates and deduplication |
-| Memory retrieval | Lets the model call a tool when an answer depends on previous memory, combining global exact `key` lookup with vector similarity search |
-| Task planning | Structured plans, tool and dependency validation, plan approval, step status tracking, and saved results |
-| Engineering foundations | Structured logs, modular code, pytest tests, and wheel/source distribution builds |
-
-### Quick start
-
-The commands below use Windows PowerShell. The command execution tool currently requires Windows; its working directory is not a filesystem sandbox.
-
-```powershell
-git clone https://github.com/sysoebuilder/agent100.git
-cd agent100
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -e .
-```
-
-On the first `agent100 config` run, the program detects that configuration is missing, asks you to select GLM or DeepSeek, securely enter an API key, and enter a model name (Enter uses the default). Provider URLs are built in and are not requested. It creates `data/.env` and writes the active selection to `data/active-model.env`. Later `config` runs can switch among configured providers. See [model configuration](docs/model-configuration.md).
-
-```powershell
-.\.venv\Scripts\agent100.exe --version
-.\.venv\Scripts\agent100.exe config
-.\.venv\Scripts\agent100.exe chat
-.\.venv\Scripts\agent100.exe taskplan "Search for Python logging practices and prepare a study outline"
-```
-
-Web Search is powered by the GLM search engine, and long-term memory uses GLM Embedding-3 for vectors. Both require a GLM API key (`ZAI_API_KEY`), even when DeepSeek is selected as the chat model. Email requires `QQ_SMTP_USERNAME` and `QQ_SMTP_AUTH_CODE` (an SMTP authorization code, not your mailbox password). Model, search, and embedding requests use your own service account and may incur charges.
-
-Sessions, logs, plans, and the local Qdrant memory database are stored in `data/` by default. Set `LLM_CLI_DATA_DIR` to override the location. When a chat ends normally with `exit` or `quit`, the program extracts memories from that run and updates long-term storage. Keep real `.env` files, personal sessions, and memory data out of version control. The current terminal interface is primarily in Chinese.
-
-### Code map and development
-
-`agent/` contains the loop, state, policies, and context manager; `tools/` contains contracts and execution; `planning/` handles plans and step execution; `memory/` handles extraction, embedding, retrieval, decisions, and Qdrant persistence; `ui/` handles terminal interaction. These modules live under `src/ai_agent_learning/`. `model.py` contains the GLM and DeepSeek clients used by the CLI.
-
-`tests/` covers model adapters, agent behavior, tools, runtime, and terminal behavior. `docs/` contains implementation notes, primarily in Chinese.
-
-Implementation notes: [GLM integration](docs/glm-model-client.md) · [Web search](docs/web-search.md) · [Long-term memory](docs/memory-system.md) · [Context estimates](docs/context-token-estimation.md) · [Terminal UI](docs/terminal-ui.md)
-
-```powershell
-.\.venv\Scripts\python.exe -m pip install pytest build
-.\.venv\Scripts\python.exe -m pytest tests
-.\.venv\Scripts\python.exe -m build
-```
-
-Build artifacts are written to `dist/`: a `.whl` installation package and a `.tar.gz` source distribution. A standalone executable is not currently provided.
+See the [deployment and API guide](docs/run-api.md), [configuration guide](docs/model-configuration.md), and [frontend guide](frontend/README.md).

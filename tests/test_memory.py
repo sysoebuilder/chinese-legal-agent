@@ -1,108 +1,96 @@
 import asyncio
-import json
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
-import pytest
-from pydantic import ValidationError
-
-from ai_agent_learning.memory import MemoryType, TemporalType
-from ai_agent_learning.model import DeepSeekClient, GlmModelClient
-from ai_agent_learning.schema import Message, ModelRequest
-
-REQUEST = ModelRequest(
-    model="test-model",
-    messages=[Message(role="user", content="我目前正在学习 RAG 记忆库。")],
+from chinese_legal_agent.memory.store import QdrantMemoryStore
+from chinese_legal_agent.memory import (
+    MemoryCandidate,
+    MemoryDecisionMaker,
+    MemoryStatus,
+    StoredMemory,
 )
 
 
-def completion(content: str, finish_reason: str = "stop") -> SimpleNamespace:
-    return SimpleNamespace(
-        choices=[
-            SimpleNamespace(
-                finish_reason=finish_reason,
-                message=SimpleNamespace(content=content),
-            )
-        ]
+def memory_candidate(content: str, key: str) -> MemoryCandidate:
+    return MemoryCandidate(
+        content=content,
+        type="project_state",
+        key=key,
+        scope="project:agent100",
+        importance=0.8,
+        confidence=0.9,
+        temporal_type="persistent",
+        status="active",
+        evidence=content,
     )
 
 
-@pytest.mark.parametrize("client_type", [GlmModelClient, DeepSeekClient])
-def test_clients_create_structured_memories_without_streaming(client_type) -> None:
-    payload = {
-        "memories": [
-            {
-                "content": "用户目前正在学习 RAG 记忆库",
-                "type": "learning_state",
-                "key": "current_learning_topic",
-                "scope": "project:agent100",
-                "importance": 0.8,
-                "confidence": 0.95,
-                "temporal_type": "temporary",
-                "valid_from": None,
-                "valid_until": None,
-                "evidence": "我目前正在学习 RAG 记忆库",
-            }
-        ]
-    }
+def stored_memory(memory_id: str, candidate: MemoryCandidate) -> StoredMemory:
+    now = datetime.now(UTC)
+    return StoredMemory(
+        **candidate.model_dump(),
+        id=memory_id,
+        created_at=now,
+        updated_at=now,
+        last_confirmed_at=now,
+    )
 
-    async def run():
-        client = client_type("test-key")
-        await client.close()
-        create = AsyncMock(return_value=completion(json.dumps(payload)))
-        client._client = SimpleNamespace(
-            chat=SimpleNamespace(completions=SimpleNamespace(create=create))
-        )
 
-        result = await client.create_memory_candidates(REQUEST)
+def test_memory_search_uses_exact_vector_query() -> None:
+    store = QdrantMemoryStore(vector_size=1)
+    store.initialize = AsyncMock()
+    store._client.query_points = AsyncMock(return_value=SimpleNamespace(points=[]))
 
-        memory = result.memories[0]
-        assert memory.type is MemoryType.LEARNING_STATE
-        assert memory.temporal_type is TemporalType.TEMPORARY
-        assert memory.key == "current_learning_topic"
-        call = create.await_args.kwargs
-        assert call["stream"] is False
-        assert call["response_format"] == {"type": "json_object"}
-        thinking = "enabled" if client_type is GlmModelClient else "disabled"
-        assert call["extra_body"] == {"thinking": {"type": thinking}}
-        assert call["messages"][0]["role"] == "system"
-        assert call["messages"][1] == {
-            "role": "user",
-            "content": "我目前正在学习 RAG 记忆库。",
-        }
+    async def run() -> None:
+        try:
+            assert await store.search([1.0], limit=50, score_threshold=0.6) == []
+            kwargs = store._client.query_points.await_args.kwargs
+            assert kwargs["search_params"].exact is True
+            assert kwargs["limit"] == 50
+            assert kwargs["score_threshold"] == 0.6
+        finally:
+            await store.close()
 
     asyncio.run(run())
 
 
-def test_memory_response_is_validated() -> None:
-    async def run():
-        client = DeepSeekClient("test-key")
-        await client.close()
-        create = AsyncMock(
-            return_value=completion(
-                json.dumps(
+def test_decision_maker_validates_and_orders_batch_results() -> None:
+    first = memory_candidate("项目使用 Qdrant", "project_database")
+    second = memory_candidate("项目使用 BM25S", "project_lexical_index")
+    old = stored_memory("memory-1", first)
+    client = SimpleNamespace(
+        create_memory_decisions=AsyncMock(
+            return_value={
+                "decisions": [
                     {
-                        "memories": [
-                            {
-                                "content": "无效候选",
-                                "type": "unknown",
-                                "key": "Invalid Key",
-                                "scope": "global",
-                                "importance": 2,
-                                "confidence": 1,
-                                "temporal_type": "temporary",
-                                "evidence": "原话",
-                            }
-                        ]
-                    }
-                )
-            )
+                        "candidate_index": 1,
+                        "decision": {
+                            "action": "add",
+                            "reason": "没有相关旧记忆",
+                        },
+                    },
+                    {
+                        "candidate_index": 0,
+                        "decision": {
+                            "action": "confirm",
+                            "target_ids": ["memory-1"],
+                            "reason": "内容一致",
+                        },
+                    },
+                ]
+            }
         )
-        client._client = SimpleNamespace(
-            chat=SimpleNamespace(completions=SimpleNamespace(create=create))
+    )
+
+    async def run() -> None:
+        decisions = await MemoryDecisionMaker(client).decide_many(
+            "test-model", [(first, [old]), (second, [])]
         )
 
-        with pytest.raises(ValidationError):
-            await client.create_memory_candidates(REQUEST)
+        assert decisions[0].target_ids == ["memory-1"]
+        assert decisions[1].action.value == "add"
+        assert old.status is MemoryStatus.ACTIVE
+        client.create_memory_decisions.assert_awaited_once()
 
     asyncio.run(run())

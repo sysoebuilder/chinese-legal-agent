@@ -23,7 +23,7 @@ PostgreSQL、Redis 和 Qdrant 由 Compose 一并启动。
 ```powershell
 New-Item -ItemType Directory -Path chinese-legal-agent -Force | Out-Null
 Set-Location chinese-legal-agent
-Invoke-WebRequest -Uri https://raw.githubusercontent.com/sysoebuilder/chinese-legal-agent/main/compose.release.yaml -OutFile compose.release.yaml
+Invoke-WebRequest -Uri https://raw.githubusercontent.com/sysoebuilder/chinese-legal-agent/v0.5.0/compose.release.yaml -OutFile compose.release.yaml
 docker compose -f compose.release.yaml pull
 docker compose -f compose.release.yaml up -d --wait
 ```
@@ -40,7 +40,9 @@ docker compose -f compose.release.yaml logs -f initialize
 
 ## 3. 打开网页
 
-访问 <http://127.0.0.1:3000>，在左下角设置中选择 GLM 或 DeepSeek，填写 API Key 并保存。法律向量检索、长期记忆和联网搜索使用 GLM 服务，因此使用 DeepSeek 对话时也需要配置 GLM Key（`ZAI_API_KEY`）。API 文档位于 <http://127.0.0.1:8001/docs>。
+访问 <http://127.0.0.1:3000>，在左下角设置中选择 GLM 或 DeepSeek，填写 API Key 并保存。API 文档位于 <http://127.0.0.1:8001/docs>。
+
+**必须配置智谱 API Key（`ZAI_API_KEY`）。本项目的向量化依赖智谱 GLM Embedding-3，法律语义检索和长期记忆需要该 Key，联网搜索也使用智谱服务。即使使用 DeepSeek 对话模型，也必须配置智谱 Key。** 初始化下载资源不需要 API Key，运行项目时应在网页设置中完成配置。
 
 ## 日常管理
 
