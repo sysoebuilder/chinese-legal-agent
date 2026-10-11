@@ -3,8 +3,8 @@
 # 启动：docker compose -f compose.release.yaml up -d --wait
 # 使用说明：https://github.com/sysoebuilder/chinese-legal-agent/blob/main/docs/dockerhub-release.md
 
-# 保留部署标识以复用现有容器和已初始化的命名卷。
-name: agent100
+# 发布版使用统一的项目名称。
+name: chinese-legal-agent
 
 # API 和 Worker 使用同一份镜像、配置与资源挂载。
 x-agent: &agent
@@ -164,9 +164,9 @@ services:
 
 volumes:
   postgres-data:
-    name: agent100_postgres
+    name: chinese-legal-agent_postgres
   qdrant-data:
-    name: agent100_qdrant
+    name: chinese-legal-agent_qdrant
   app-data:
   law-assets:
   redis-data:
