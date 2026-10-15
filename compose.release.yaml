@@ -1,4 +1,4 @@
-# Docker Hub 发布版 0.5.0：下载此文件即可运行，无需项目源码或本地构建。
+# Docker Hub 发布版 0.5.1：下载此文件即可运行，无需项目源码或本地构建。
 # 环境：Docker Compose + Linux amd64 containers + NVIDIA GPU。
 # 启动：docker compose -f compose.release.yaml up -d --wait
 # 使用说明：https://github.com/sysoebuilder/chinese-legal-agent/blob/main/docs/dockerhub-release.md
@@ -8,7 +8,7 @@ name: chinese-legal-agent
 
 # API 和 Worker 使用同一份镜像、配置与资源挂载。
 x-agent: &agent
-  image: sysoe/chinese-legal-agent:0.5.0
+  image: sysoe/chinese-legal-agent:0.5.1
   platform: linux/amd64
   init: true
   restart: unless-stopped
@@ -37,7 +37,7 @@ x-agent: &agent
 services:
   # 一次性初始化配置、法律快照/BM25 和重排模型。
   initialize:
-    image: sysoe/chinese-legal-agent-init:0.5.0
+    image: sysoe/chinese-legal-agent-init:0.5.1
     platform: linux/amd64
     init: true
     restart: "no"
@@ -56,7 +56,7 @@ services:
         condition: service_healthy
 
   frontend:
-    image: sysoe/chinese-legal-agent-web:0.5.0
+    image: sysoe/chinese-legal-agent-web:0.5.1
     platform: linux/amd64
     restart: unless-stopped
     ports:

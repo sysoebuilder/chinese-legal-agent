@@ -12,14 +12,14 @@
 
 ### 1. 下载发布版并启动
 
-发布版直接使用 Docker Hub 的三个 `sysoe/chinese-legal-agent*:0.5.0` 镜像，无需安装 Git、Python、Node.js 或在本机构建。
+发布版直接使用 Docker Hub 的三个 `sysoe/chinese-legal-agent*:0.5.1` 镜像，无需安装 Git、Python、Node.js 或在本机构建。
 
 在 PowerShell 中执行：
 
 ```powershell
 New-Item -ItemType Directory -Path chinese-legal-agent -Force | Out-Null
 Set-Location chinese-legal-agent
-Invoke-WebRequest -Uri https://raw.githubusercontent.com/sysoebuilder/chinese-legal-agent/v0.5.0/compose.release.yaml -OutFile compose.release.yaml
+Invoke-WebRequest -Uri https://raw.githubusercontent.com/sysoebuilder/chinese-legal-agent/v0.5.1/compose.release.yaml -OutFile compose.release.yaml
 docker compose -f compose.release.yaml pull
 docker compose -f compose.release.yaml up -d --wait
 ```
@@ -84,6 +84,8 @@ Agent 会识别法律问题、梳理客观事实、检索可能适用的法律�
 
 默认资源来自固定版本的发布包，初始化不会自动追踪法规变更。法律适用时间和地域也是回答流程需要检查的内容。
 
+有标题检索测评集现包含 **300 条用例、240 个不同目标法条**。在人工提供标题和正文关键词的条件下，BM25 前 50 条候选召回率为 **100%**，经 BGE 重排后 Recall@1 为 **94%**、Recall@5 为 **99.67%**。这不代表端到端法律回答准确率；详见 [测评数据与复现说明](evals/README.md) 和 [完整报告](eval-results/legal-retrieval-titled-300-bm25-rerank.md)。
+
 ## 严谨的法律分析流程
 
 中国法律智能体将法律问题交给独立的 LangGraph 法律工作流，围绕事实和已检索依据组织结论。
@@ -132,7 +134,7 @@ flowchart LR
 
 发布版 `compose.release.yaml` 的项目名为 `chinese-legal-agent`，数据卷名称以 `chinese-legal-agent_` 开头。源码构建使用独立的 `compose.yaml`。
 
-发布版 API 和 Worker 共用 `sysoe/chinese-legal-agent:0.5.0` 镜像，前端使用 `sysoe/chinese-legal-agent-web:0.5.0`，初始化使用 `sysoe/chinese-legal-agent-init:0.5.0`。PostgreSQL、Redis 和 Qdrant 是独立服务。源码构建使用对应的 `:local` 镜像；修改代码后需要重新构建对应镜像并重新创建容器。
+发布版 API 和 Worker 共用 `sysoe/chinese-legal-agent:0.5.1` 镜像，前端使用 `sysoe/chinese-legal-agent-web:0.5.1`，初始化使用 `sysoe/chinese-legal-agent-init:0.5.1`。PostgreSQL、Redis 和 Qdrant 是独立服务。源码构建使用对应的 `:local` 镜像；修改代码后需要重新构建对应镜像并重新创建容器。
 
 当前部署的业务服务全部在容器中运行。Agent 不接入 Windows 终端 MCP，Compose 和启动脚本也不启动宿主机终端服务。详见 [部署说明](docs/run-api.md)。
 
@@ -202,7 +204,7 @@ MCP 地址为 `http://127.0.0.1:8000/mcp`，当前独立法律 MCP 的 HTTP 入�
 - [模型、插件、密钥与权限配置](docs/model-configuration.md)
 - [前端开发说明](frontend/README.md)
 
-版本 **0.5.0** · Python **3.11+** · LangChain / LangGraph · FastAPI / Celery · PostgreSQL / Redis / Qdrant
+版本 **0.5.1** · Python **3.11+** · LangChain / LangGraph · FastAPI / Celery · PostgreSQL / Redis / Qdrant
 
 ## 搜索关键词
 

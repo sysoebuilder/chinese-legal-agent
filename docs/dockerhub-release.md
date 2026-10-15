@@ -1,12 +1,12 @@
-# Docker Hub 发布版部署（0.5.0）
+# Docker Hub 发布版部署（0.5.1）
 
 发布版使用 Docker Hub 上已构建的镜像。只需下载 `compose.release.yaml`，无需安装 Git、Python、Node.js 或获取项目源码。
 
 | 服务 | 镜像 |
 | --- | --- |
-| API、Worker | `sysoe/chinese-legal-agent:0.5.0` |
-| 初始化 | `sysoe/chinese-legal-agent-init:0.5.0` |
-| 前端 | `sysoe/chinese-legal-agent-web:0.5.0` |
+| API、Worker | `sysoe/chinese-legal-agent:0.5.1` |
+| 初始化 | `sysoe/chinese-legal-agent-init:0.5.1` |
+| 前端 | `sysoe/chinese-legal-agent-web:0.5.1` |
 
 PostgreSQL、Redis 和 Qdrant 由 Compose 一并启动。
 
@@ -23,7 +23,7 @@ PostgreSQL、Redis 和 Qdrant 由 Compose 一并启动。
 ```powershell
 New-Item -ItemType Directory -Path chinese-legal-agent -Force | Out-Null
 Set-Location chinese-legal-agent
-Invoke-WebRequest -Uri https://raw.githubusercontent.com/sysoebuilder/chinese-legal-agent/v0.5.0/compose.release.yaml -OutFile compose.release.yaml
+Invoke-WebRequest -Uri https://raw.githubusercontent.com/sysoebuilder/chinese-legal-agent/v0.5.1/compose.release.yaml -OutFile compose.release.yaml
 docker compose -f compose.release.yaml pull
 docker compose -f compose.release.yaml up -d --wait
 ```
@@ -66,4 +66,4 @@ docker compose -f compose.release.yaml up -d --wait
 
 发布版项目名为 `chinese-legal-agent`，数据卷名称均以 `chinese-legal-agent_` 开头。
 
-该文件固定使用 `0.5.0`，不会随 `latest` 自动升级。后续升级时，先备份数据，再将三个业务镜像的标签一起改为对应发布版本，并执行 `pull` 和 `up -d --wait`。
+该文件固定使用 `0.5.1`，不会随 `latest` 自动升级。后续升级时，先备份数据，再将三个业务镜像的标签一起改为对应发布版本，并执行 `pull` 和 `up -d --wait`。
