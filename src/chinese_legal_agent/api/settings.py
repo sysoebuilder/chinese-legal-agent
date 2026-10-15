@@ -15,7 +15,7 @@ class ApiSettings:
     token: str = field(default="", repr=False)
     heartbeat_interval: float = 15.0
     cancel_check_interval: float = 1.0
-    dispatch_interval: float = 2.0
+    dispatch_interval: float = 0.2
     visibility_timeout: int = 3600
 
     @classmethod
