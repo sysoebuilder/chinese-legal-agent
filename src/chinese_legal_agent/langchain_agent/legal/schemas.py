@@ -42,11 +42,12 @@ class LegalCaseAnalysisOutput(BaseModel):
 class LegalDecisionOutput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    action: Literal["ask_user", "retrieve_more", "final_answer", "refuse"]
+    action: Literal["ask_user", "retrieve_more", "final_answer", "uncertain_answer", "refuse"]
     reason: str = Field(min_length=1)
     question: str | None = None
     retrieval_cases: list[LegalRetrievalCaseOutput] = Field(default_factory=list)
     usable_law_ids: list[str] = Field(default_factory=list)
+    uncertainty_points: list[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def validate_action_fields(self) -> "LegalDecisionOutput":
@@ -54,8 +55,12 @@ class LegalDecisionOutput(BaseModel):
             raise ValueError("ask_user 决策必须提供 question")
         if self.action == "retrieve_more" and not self.retrieval_cases:
             raise ValueError("retrieve_more 决策必须提供 retrieval_cases")
-        if self.action == "final_answer" and not self.usable_law_ids:
-            raise ValueError("final_answer 决策必须提供 usable_law_ids")
+        if self.action in {"final_answer", "uncertain_answer"} and not self.usable_law_ids:
+            raise ValueError(f"{self.action} 决策必须提供 usable_law_ids")
+        if self.action == "uncertain_answer" and (
+            not self.uncertainty_points or any(not point.strip() for point in self.uncertainty_points)
+        ):
+            raise ValueError("uncertain_answer 决策必须提供非空 uncertainty_points")
         return self
 
 
@@ -64,10 +69,11 @@ class LegalAnswerReviewOutput(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    action: Literal["answer", "ask_user", "retrieve_more", "refuse"]
+    action: Literal["answer", "ask_user", "retrieve_more", "uncertain_answer", "refuse"]
     reason: str = Field(min_length=1)
     question: str | None = None
     retrieval_cases: list[LegalRetrievalCaseOutput] = Field(default_factory=list)
+    uncertainty_points: list[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def validate_action_fields(self) -> "LegalAnswerReviewOutput":
@@ -75,4 +81,8 @@ class LegalAnswerReviewOutput(BaseModel):
             raise ValueError("ask_user 必须提供 question")
         if self.action == "retrieve_more" and not self.retrieval_cases:
             raise ValueError("retrieve_more 必须提供 retrieval_cases")
+        if self.action == "uncertain_answer" and (
+            not self.uncertainty_points or any(not point.strip() for point in self.uncertainty_points)
+        ):
+            raise ValueError("uncertain_answer 必须提供非空 uncertainty_points")
         return self

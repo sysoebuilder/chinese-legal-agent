@@ -36,6 +36,8 @@ def test_classify_receives_optional_previous_ai_message():
 def test_analyze_case_only_updates_facts_and_preserves_query_history():
     nodes = LegalNodes(model=None)
     case = LegalNodes._new_case("周六加班费怎么算？")
+    case["asked_questions"] = ["单位是否安排了补休？"]
+    case["user_supplements"] = ["没有"]
     previous_query = {
         "issue": "休息日加班",
         "title_keywords": ["劳动法"],
@@ -50,6 +52,9 @@ def test_analyze_case_only_updates_facts_and_preserves_query_history():
         assert schema is LegalCaseAnalysisOutput
         assert stream is True
         assert "只输出 objective_facts" in system
+        context = json.loads(content)
+        assert context["asked_questions"] == ["单位是否安排了补休？"]
+        assert context["user_supplements"] == ["没有"]
         return LegalCaseAnalysisOutput(objective_facts=["用户周六工作"])
 
     nodes._invoke_json = fake_invoke

@@ -87,6 +87,10 @@ def create_legal_graph(
         "generate_final_answer",
         _timed_node("generate_final_answer", nodes.generate_final_answer),
     )
+    graph.add_node(
+        "generate_uncertain_answer",
+        _timed_node("generate_uncertain_answer", nodes.generate_uncertain_answer),
+    )
     graph.add_node("refuse", _timed_node("refuse", nodes.refuse))
 
     graph.add_edge(START, "initialize")
@@ -114,6 +118,7 @@ def create_legal_graph(
             "ask_user": "ask_user",
             "retrieve_more": "retrieve_laws",
             "final_answer": "generate_final_answer",
+            "uncertain_answer": "generate_uncertain_answer",
             "refuse": "refuse",
         },
     )
@@ -130,8 +135,14 @@ def create_legal_graph(
             "retry": "generate_final_answer",
             "ask_user": "ask_user",
             "retrieve_more": "retrieve_laws",
+            "uncertain_answer": "generate_uncertain_answer",
             "refuse": "refuse",
         },
+    )
+    graph.add_conditional_edges(
+        "generate_uncertain_answer",
+        _route_uncertain_answer,
+        {"end": END, "retry": "generate_uncertain_answer", "refuse": "refuse"},
     )
     graph.add_edge("refuse", END)
     return graph.compile()
@@ -174,7 +185,7 @@ def _route_after_user(state: LegalAgentState) -> Literal["analyze_case", "refuse
 
 def _route_final_answer(
     state: LegalAgentState,
-) -> Literal["end", "retry", "ask_user", "retrieve_more", "refuse"]:
+) -> Literal["end", "retry", "ask_user", "retrieve_more", "uncertain_answer", "refuse"]:
     case = _active_case(state)
     if case.get("refusal_reason"):
         return "refuse"
@@ -188,7 +199,18 @@ def _route_final_answer(
         return "ask_user"
     if action == "retrieve_more":
         return "retrieve_more"
+    if action == "uncertain_answer":
+        return "uncertain_answer"
     return "refuse"
+
+
+def _route_uncertain_answer(state: LegalAgentState) -> Literal["end", "retry", "refuse"]:
+    case = _active_case(state)
+    if case.get("refusal_reason"):
+        return "refuse"
+    if case.get("retry_target") == "generate_uncertain_answer":
+        return "retry"
+    return "end" if case.get("final_answer") else "refuse"
 
 
 def _active_case(state: LegalAgentState) -> LegalCase:

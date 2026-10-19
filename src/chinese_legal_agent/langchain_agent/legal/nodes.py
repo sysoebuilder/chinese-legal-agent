@@ -104,6 +104,7 @@ active_case_id 只是最近案件的参考，不能据此强行归类。
             case["pending_retrieval_cases"] = []
             case["usable_laws"] = []
             case["decision"] = None
+            case["uncertainty_points"] = []
             case["final_answer"] = None
             case["refusal_reason"] = None
             case["retrieval_feedback"] = None
@@ -127,6 +128,7 @@ active_case_id 只是最近案件的参考，不能据此强行归类。
             LegalCaseAnalysisOutput,
             """
 从用户原话和补充信息中整理中国法律判断所需的完整客观事实。
+结合 asked_questions 中的历史追问理解用户补充回答；问题中的假设不代表用户已确认的事实。
 不得猜测、补充或预设用户没有陈述的事实和法律结论。
 只输出 objective_facts，不生成检索条件或法律结论。输出严格 JSON。
 """.strip(),
@@ -135,6 +137,7 @@ active_case_id 只是最近案件的参考，不能据此强行归类。
                     "current_question": case["current_question"],
                     "original_question": case["original_question"],
                     "user_supplements": case["user_supplements"],
+                    "asked_questions": case.get("asked_questions", []),
                 },
                 ensure_ascii=False,
             ),
@@ -143,6 +146,7 @@ active_case_id 只是最近案件的参考，不能据此强行归类。
         return self._update_case(
             state,
             objective_facts=result.objective_facts,
+            uncertainty_points=[],
             pending_retrieval_cases=[],
             decision=None,
             retrieval_feedback=None,
@@ -202,13 +206,30 @@ active_case_id 只是最近案件的参考，不能据此强行归类。
 只根据用户原话、客观事实和检索结果决定下一步，不得直接编写最终回答。
 
 action 只能是：
-- ask_user：缺少时间、地域或关键案件事实，必须提供 question。
+- ask_user：缺少时间、地域或会影响法律适用、核心结论的案件事实，必须提供 question。
 - retrieve_more：尚未检索或现有检索不足，必须提供 retrieval_cases。
-- final_answer：已经找到足以支持回答的适用法律依据，并已完成下述依据选择，才能选择此动作。
-- refuse：数据库无结果、依据无法确认或不能安全形成法律结论。
+- final_answer：核心事实已经明确，没有尚待核实的关键事实假设，且已经找到足以支持回答的适用法律依据，并已完成下述依据选择，才能选择此动作。
+- uncertain_answer：已有可用法律依据，但关键事实经追问仍无法确认，选择此动作输出假设性最终回答，必须提供 uncertainty_points 和 usable_law_ids。
+- refuse：数据库无结果、适用法律依据无法确认，或连有依据的假设性分析也无法形成；不得仅因用户事实尚未完全明确就拒答。
 
 retrieval_round 为 0 且缺少法律依据时，不得以数据库无结果为由拒答；应选择 retrieve_more。
 如果缺少的用户事实会影响检索条件或核心结论，应先选择 ask_user。
+每轮都要结合法律规定的适用条件、用户原话、user_supplements 和 objective_facts，
+逐项判断决定法律关系、责任、金额或程序是否合法的关键事实是否已经明确。
+已经检索到法律不代表案件事实充分；不得把用户未提及的情况默认认定为存在或不存在。
+如果回答需要依赖尚未确认的关键事实假设，应先选择 ask_user，先向用户确认，再重新判断；
+不要用假设性回答跳过尚可完成的首次关键事实追问。已经询问而用户明确不知道、无法提供或无法进一步核实时，
+应选择 uncertain_answer，明确列出尚未确认的事实及其对法律判断的影响，再由专门节点给出分情况分析。
+如果还不清楚哪些事实影响法律判断，应先检索相关规定，再依据法律适用条件识别事实缺口。
+输入中的 asked_questions 是本案历史追问问题，包含本轮之前已向用户提出的问题。
+历史提问中已经提及的信息不要重复提问，包括同义改写或把已问过的子问题重新组合后再问；
+同时检查用户已经主动提供的信息，只询问尚未问过且会影响本案判断的新事实缺口。
+若已问过的关键事实仍未明确，可针对尚未询问的相关证据或其他核实途径提出新问题；
+若无新的核实途径且关键不确定性仍无法消除，但法律依据足以解释各分支，应选择 uncertain_answer，
+不要继续追问或仅因事实不足选择 refuse，也不得将假设当成已知事实。
+uncertainty_points 是本轮仍未确认的具体事实及其影响，必须为非空字符串数组，不能只写“信息不足”。
+每个不确定点应说明缺少什么事实，以及它会影响哪项责任、金额、法律关系或救济判断。
+question 应清楚、具体，聚焦本案缺失的信息；事实已充分时不必为了追问而追问。
 输入中的 retrieval_query_history 是此前已经使用的争议点及标题、内容关键词。
 若 retrieval_feedback 提示读取不到检索关键词，请重新决定；需要检索时重新填写符合结构的 retrieval_cases。
 若 retry_feedback 存在，说明上一次决策调用失败；请重新独立完成本轮决定。
@@ -219,9 +240,9 @@ retrieval_round 为 0 且缺少法律依据时，不得以数据库无结果为�
 每次 retrieval_cases 最多 5 个；先全面检查哪些依据仍缺失，再把实质不同的角度尽量放在同一批。
 同一角度的近义词放在一项的关键词数组中，不要为了凑数量拆成多个相似项。
 不要重复或仅微调历史检索条件；如果没有实质不同的检索角度，应根据现有证据选择
-ask_user 或 refuse，不要继续重复检索。
+ask_user、uncertain_answer 或 refuse，不要继续重复检索。
 
-选择 final_answer 时必须同时满足：
+选择 final_answer 或 uncertain_answer 时必须同时满足下列法律依据选择要求：
 1. 从输入 retrieved_laws 列表中选择与本次问题相关且适用的记录。
 2. 输出 usable_law_ids 字段，类型为非空字符串数组，至少包含一个所选记录的顶层 id。
    将每个 id 原样复制为字符串，不得改写、截断或自行生成；不要使用 payload 内的字段、
@@ -231,7 +252,10 @@ ask_user 或 refuse，不要继续重复检索。
    usable_laws 由程序生成，不是你需要输出的字段。
 4. reason 简要说明所选依据为什么能够支持回答；仅在 reason 中提及法规不能代替填写 usable_law_ids。
 5. 输出前检查 usable_law_ids 未遗漏、不是 null 或空数组，且全部来自本次输入。
-   如果无法选出有效 id，不得选择 final_answer；根据缺失信息选择 ask_user、retrieve_more 或 refuse。
+   如果无法选出有效 id，不得选择 final_answer 或 uncertain_answer；根据缺失信息选择 ask_user、retrieve_more 或 refuse。
+6. final_answer 要求核心事实明确，结论不依赖尚待用户确认的事实假设。
+   uncertain_answer 要求输出具体 uncertainty_points，以已知事实为基础，只对这些不确定点进行有法律依据的分支分析；
+   两种动作都不能将未检索到的法律、未知的法律效力或适用地域当作事实假设绕过核实。
 
 地方性规定只有在用户地域信息足够时才可选用。失效、尚未生效、时效未知或关键字段缺失的法规，
 不得作为确定结论依据。输出严格 JSON。
@@ -249,12 +273,13 @@ ask_user 或 refuse，不要继续重复检索。
             }
 
         usable_laws: list[RetrievedLaw] = []
-        if decision["action"] == "final_answer":
+        if decision["action"] in {"final_answer", "uncertain_answer"}:
             selected_ids = set(decision.get("usable_law_ids", []))
             usable_laws = [
                 law for law in case["retrieved_laws"] if law["id"] in selected_ids
             ]
-            if not usable_laws:
+            if not usable_laws or selected_ids != {law["id"] for law in usable_laws}:
+                usable_laws = []
                 decision = {
                     "action": "refuse",
                     "reason": "决策模型没有选中可验证的法律依据。",
@@ -268,7 +293,11 @@ ask_user 或 refuse，不要继续重复检索。
                 else []
             ),
             usable_laws=usable_laws,
+            uncertainty_points=(
+                result.uncertainty_points if decision["action"] == "uncertain_answer" else []
+            ),
             retrieval_feedback=None,
+            refusal_reason=None,
             retry_target=None,
             retry_count=0,
         )
@@ -313,13 +342,7 @@ ask_user 或 refuse，不要继续重复检索。
                 state,
                 refusal_reason="没有经过决策模型确认的可用法律依据。",
             )
-        answer_context = {
-            "current_question": case["current_question"],
-            "original_question": case["original_question"],
-            "user_supplements": case["user_supplements"],
-            "objective_facts": case["objective_facts"],
-            "usable_laws": case["usable_laws"],
-        }
+        answer_context = self._answer_context(state)
         messages = [
             SystemMessage(
                 content=(
@@ -349,15 +372,20 @@ action 只能是：
 - answer：现有事实和 usable_laws 足以支持对用户核心问题的回答。
 - ask_user：缺少会影响核心结论的事实，question 必须明确询问缺少的信息。
 - retrieve_more：缺少支持核心结论的法律依据，retrieval_cases 必须提供针对缺口的检索条件。
-- refuse：现有依据不足且历史检索已覆盖相关角度，无法可靠回答。
+- uncertain_answer：法律依据可用，但关键事实经追问仍无法确认；提供具体 uncertainty_points，交给不确定性回答节点作附条件分析。
+- refuse：现有法律依据不足且历史检索已覆盖相关角度，连有依据的附条件分析也无法形成。
 选择 retrieve_more 时，retrieval_cases 最多 5 个；全面列出本轮尚缺的不同法律依据，
 将实质不同的检索角度尽量放在同一批，不要把近义词拆成重复项。
 输入中的 retrieval_query_history 是此前已检索过的争议点和关键词。
 不要重复或仅微调历史检索条件；若没有实质不同的检索角度，
-应根据现有依据选择 answer、ask_user 或 refuse，不要继续检索。
+应根据现有依据选择 answer、ask_user、uncertain_answer 或 refuse，不要继续检索。
 reason 说明通过检查的理由或具体缺口。不能把上游已选择最终回答当成依据充分的证明。
 区分关键缺口与一般办理建议；不影响核心回答的材料准备、后续行动建议不必回退。
 不要重复询问用户已经提供的信息，也不要猜测事实或编造未检索到的法律。
+结合已选法律的适用条件与已有事实检查关键事实假设；仍依赖未确认的关键假设时不得选择 answer，
+不要用分情况回答跳过尚可完成的关键事实追问。asked_questions 中已提及的问题及其子问题不要重复询问，
+包括同义改写；仅针对未问过的新事实缺口或新的核实途径提问。已问过仍无法确认且无新核实途径时，
+选择 uncertain_answer，并在 uncertainty_points 中逐项说明未知事实及其对法律判断的影响，不要仅因事实不足拒答。
 """.strip(),
             json.dumps(
                 {
@@ -372,6 +400,19 @@ reason 说明通过检查的理由或具体缺口。不能把上游已选择最�
         if retry_update is not None:
             return retry_update
         if review.action != "answer":
+            if review.action == "uncertain_answer":
+                return self._update_case(
+                    state,
+                    decision={
+                        **review.model_dump(exclude_none=True),
+                        "usable_law_ids": [law["id"] for law in case["usable_laws"]],
+                    },
+                    uncertainty_points=review.uncertainty_points,
+                    final_answer=None,
+                    refusal_reason=None,
+                    retry_target=None,
+                    retry_count=0,
+                )
             if review.action == "refuse":
                 return self._update_case(
                     state,
@@ -397,13 +438,50 @@ reason 说明通过检查的理由或具体缺口。不能把上游已选择最�
                 retry_count=0,
             )
         messages[0].content += "最终回答前的检查意见：" + review.reason
+        return await self._generate_answer(state, messages, "generate_final_answer")
+
+    async def generate_uncertain_answer(self, state: LegalAgentState) -> dict[str, Any]:
+        case = self._active_case(state)
+        if not case["usable_laws"]:
+            return self._update_case(
+                state, refusal_reason="没有经过决策模型确认的可用法律依据。"
+            )
+        if not case.get("uncertainty_points"):
+            return self._update_case(
+                state, refusal_reason="不确定性回答缺少决策节点确认的不确定点。"
+            )
+        messages = [
+            SystemMessage(
+                content="""
+你负责根据当前案件的结构化上下文生成假设性最终回答。
+结合 original_question 和 current_question 回答用户的核心法律问题，不要仅回复最后一条“无法补充”。
+上下文与普通最终回答一致，uncertainty_points 列出决策阶段确认的尚未解决的事实及其影响。
+先说明已有事实支持的结论，再明确列出相关不确定点；不能把问题中的假设或用户“不知道”的内容当作已知事实。
+针对 uncertainty_points 中影响结论的事实分别说明：假设是什么、该假设成立时如何适用已提供的法律、
+假设不成立或实际情况相反时结论如何变化。事实未知时不得替用户选定某一分支，不得保证获赔或胜诉。
+只引用 usable_laws 中提供的法律依据，不得编造未检索到的法律，也不得用假设绕过法律效力或地域适用问题。
+已有工资、金额、工龄等事实足以计算时，给出相应分支下的计算过程；数据不足时只给公式并列明缺失量，不得捏造数字。
+说明适用时间、地域和结论边界，提示可核实的证据与下一步行动。
+这是本轮最终回答，不再发起追问，不要仅因列明的事实无法确认而整体拒答。
+""".strip()
+            ),
+            HumanMessage(
+                content="以下是本轮法律状态：\n"
+                + json.dumps(self._answer_context(state), ensure_ascii=False, default=str)
+            ),
+        ]
+        return await self._generate_answer(state, messages, "generate_uncertain_answer")
+
+    async def _generate_answer(
+        self, state: LegalAgentState, messages: list[Any], node_name: str
+    ) -> dict[str, Any]:
         answer_parts: list[str] = []
         try:
             async for chunk in self.model.astream(messages):
                 if chunk.text:
                     answer_parts.append(chunk.text)
         except Exception as error:  # noqa: BLE001 -- 子图根据状态决定是否重试。
-            return self._retry_or_refuse(state, "generate_final_answer", error)
+            return self._retry_or_refuse(state, node_name, error)
         answer = "".join(answer_parts).strip()
         if not answer:
             return self._update_case(
@@ -413,6 +491,7 @@ reason 说明通过检查的理由或具体缺口。不能把上游已选择最�
         update = self._update_case(
             state,
             final_answer=answer,
+            refusal_reason=None,
             retry_target=None,
             retry_count=0,
         )
@@ -571,7 +650,9 @@ reason 说明通过检查的理由或具体缺口。不能把上游已选择最�
                 "current_question": case["current_question"],
                 "original_question": case["original_question"],
                 "user_supplements": case["user_supplements"],
+                "asked_questions": case.get("asked_questions", []),
                 "objective_facts": case["objective_facts"],
+                "uncertainty_points": case.get("uncertainty_points", []),
                 "retrieval_round": case["retrieval_round"],
                 "retrieval_feedback": case.get("retrieval_feedback"),
                 "retry_feedback": (
@@ -585,6 +666,19 @@ reason 说明通过检查的理由或具体缺口。不能把上游已选择最�
             ensure_ascii=False,
             default=str,
         )
+
+    @staticmethod
+    def _answer_context(state: LegalAgentState) -> dict[str, Any]:
+        case = LegalNodes._active_case(state)
+        return {
+            "current_question": case["current_question"],
+            "original_question": case["original_question"],
+            "user_supplements": case["user_supplements"],
+            "asked_questions": case.get("asked_questions", []),
+            "objective_facts": case["objective_facts"],
+            "usable_laws": case["usable_laws"],
+            "uncertainty_points": case.get("uncertainty_points", []),
+        }
 
     @staticmethod
     def _retrieval_query_history(case: LegalCase) -> list[dict[str, Any]]:
@@ -644,7 +738,9 @@ reason 说明通过检查的理由或具体缺口。不能把上游已选择最�
             "current_question": question,
             "original_question": question,
             "user_supplements": [],
+            "asked_questions": [],
             "objective_facts": [],
+            "uncertainty_points": [],
             "retrieval_round": 0,
             "pending_retrieval_cases": [],
             "retrieval_feedback": None,
@@ -682,4 +778,12 @@ reason 说明通过检查的理由或具体缺口。不能把上游已选择最�
         case_id = state.get("active_case_id")
         case = dict(LegalNodes._active_case(state))
         case.update(changes)
+        case.setdefault("asked_questions", [])
+        case.setdefault("uncertainty_points", [])
+        decision = changes.get("decision")
+        if decision and decision["action"] == "ask_user":
+            # 在进入 interrupt 前提交问题，恢复 ask_user 节点时不重复追加。
+            case["asked_questions"] = [
+                *case["asked_questions"], str(decision["question"]).strip()
+            ]
         return {"cases": {**state["cases"], case_id: case}}
