@@ -1,8 +1,43 @@
 # 中国法律智能体
 
-**面向中国法律法规检索与案件分析的智能体，内置 703,271 条法律知识记录。**
+**本项目针对普通对话 AI 回答法律问题时的分析不严谨、未经核实就给出假设性回答，以及编造或误用法律依据的法律幻觉问题。**
+
+通过“核实事实 → 检索法律 → 审查依据 → 形成结论”的固定工作流，减少把猜测当事实、把条件分支当结论的回答，让法律分析过程与引用依据可以检查。
+
+| 常见问题 | 本项目的处理方式 |
+| --- | --- |
+| 🧩 分析不严谨 | 按案件整理客观事实，检查时间、地域与法律适用条件，回答前再次审查事实和依据 |
+| ❓ 假设性回答 | 关键事实缺失时先追问，不直接用“如果……那么……”替代核实；确实无法补充时，明确区分已知结论与有依据的假设分支 |
+| ⚖️ 法律幻觉 | 检索并选择可核验的法律依据，约束引用范围；依据不足时说明缺口，不把未知法条或适用条件当成确定事实 |
+
+面向中国法律法规检索与案件分析，内置 **703,271 条法律知识记录**。
 
 英文项目名：**Chinese Legal Agent** · 仓库名：`chinese-legal-agent`。
+
+## 📊 A v3 与 B v1 对照测试
+
+**A v3** 为当前源码中的固定 LangGraph 法律工作流，包含案件隔离、历史追问与不确定性回答节点。**B v1** 为提示词驱动的 LangChain Agent，同样可以调用法律检索和 `ask_user`，由模型自主选择执行步骤。
+
+两组均使用 **deepseek-flash**、同一法律检索实现和基于预设事实的 LLM 模拟用户，覆盖 **12 个案件 × 3 轮，共 36 个案次/组**。评审模型为独立的 **GLM-5.3-flash**。
+
+![A v3 与 B v1 的语义通过率、必要追问覆盖、平均 Agent token 和平均耗时对照](docs/images/legal-agent-comparison.svg)
+
+| 指标 | 🧭 A v3：固定工作流 | 💬 B v1：自主工具循环 |
+| --- | ---: | ---: |
+| 🎯 语义评分通过 | **36/36（100.00%）** | 22/36（61.11%） |
+| 🔎 必须追问的案次中实际发起追问 | **18/18** | 4/18 |
+| 🗣️ 实际追问总次数 | 22 | 4 |
+| 🧮 每案平均 Agent token | **30,122.92** | 56,275.53 |
+| ⏱️ 每案平均耗时 | 57.348 秒 | **22.045 秒** |
+| 🛠️ 每案平均工具调用 | 1.917 | 1.583 |
+
+**评分口径：** 必须追问的关键事实未实际获取时，即使附条件结论正确，也判错。关键事实取得后再判断核心法律结论。模拟用户与评审 token 不计入 Agent 指标，模拟用户耗时计入；工作流节点切换不算工具调用。A v3 有 16 个案次通过不确定性回答节点完成，拒答为 0。
+
+**执行范围：** A v3 为完整三轮运行；B v1 汇总 33 条既有记录与 3 条单案补测，后续案件未随该单案重新执行，首轮补测还包含独立检索进程的模型加载成本。因此耗时不能视为两组完整连续执行的严格速度对照。
+
+**结果边界：** 这是法律子图与自主工具 Agent 的整体方案对照，两组的案件隔离、模型适配器和运行环境也存在差异。12 个案件已经用于调试，不能据此推断泛化能力，也不能把 100% 语义通过率理解为零法律幻觉或全部法条引文准确。现有评分中 B02 的定作商品确认要求仍待专项复核；第三轮 C04 也有法条编号误引但核心结论判为通过的记录。
+
+查看完整问题、实际追问、最终回答及评分理由：[A v3 报告](comparison/reports/A_v3.md) · [B v1 报告](comparison/reports/B_v1.md)。
 
 **必须配置智谱 API Key（`ZAI_API_KEY`）：本项目的向量化依赖智谱 GLM Embedding-3，无论对话使用 GLM 还是 DeepSeek，都需要该 Key。**
 
@@ -101,7 +136,10 @@ flowchart LR
     C -->|具备回答条件| F[最终回答前的充分性检查]
     F -->|仍有缺口| C
     F -->|通过| G[结合检索依据回答]
-    C -->|无法取得充分依据| H[说明不足并拒绝确定结论]
+    C -->|已有依据，事实经追问仍无法确认| I[记录不确定点并进行分支分析]
+    F -->|事实已问仍无法确认，依据可用| I
+    I --> J[标明假设、计算条件与结论边界]
+    C -->|无法取得充分法律依据| H[说明依据不足，不作确定结论]
 ```
 
 | 环节 | 已实现的约束 |
@@ -109,9 +147,10 @@ flowchart LR
 | 案件识别 | 区分新案件、已有案件的追问与非法律问题，按案件保存事实和分析状态 |
 | 事实梳理 | 从用户陈述和补充信息中提取客观事实，提示模型不得猜测未提供的事实或预设结论 |
 | 依据选择 | 由决策节点选择可用的检索结果，缺少依据时继续检索 |
-| 补充询问 | 通过可持久化中断请求关键事实，收到回应后从 checkpoint 继续 |
-| 回答前检查 | 再次审查事实和依据是否足够，可退回补充询问、检索或拒绝回答 |
+| 补充询问 | 通过可持久化中断请求关键事实，保存历史问题并约束重复提问，收到回应后从 checkpoint 继续 |
+| 回答前检查 | 再次审查事实和依据是否足够，可退回补充询问、检索、不确定性回答或拒绝回答 |
 | 回答生成 | 限定模型引用提供的法律依据，说明适用时间、地域和结论的不确定性 |
+| 不确定性回答 | 已追问但事实仍无法确认、且已有可用依据时，传入结构化上下文与不确定点，分别说明有依据的假设分支，不编造事实 |
 | 失败处理 | 对可恢复错误进行有限重试；无法取得充分依据时明确说明原因 |
 
 这些约束由结构化状态、工作流路由和模型提示共同实现，方便检查案件分析过程与恢复中断任务。
@@ -214,9 +253,11 @@ Chinese Legal Agent, Chinese law, legal AI assistant, legal knowledge base, lega
 
 ## English
 
-**Chinese Legal Agent provides Chinese law retrieval and case analysis, backed by 703,271 legal knowledge records.** The count refers to indexed records, rather than distinct statutes.
+**Chinese Legal Agent addresses insufficient fact checking, unverified hypothetical conclusions, and fabricated or misapplied legal grounds in conversational legal answers.** It provides Chinese law retrieval and case analysis, backed by 703,271 indexed legal knowledge records rather than distinct statutes.
 
-The legal workflow maintains case facts, retrieves and reranks candidate legal grounds, requests missing information, and reviews whether the evidence is sufficient before generating an answer. Generation is instructed to use the supplied legal grounds and explain uncertainty, time, and jurisdiction. The workflow can return to retrieval or decline a definitive conclusion when the available grounds are insufficient.
+The legal workflow maintains case facts and clarification history, retrieves and reranks candidate legal grounds, requests missing information, and reviews whether the evidence is sufficient before generating an answer. When facts remain unavailable after clarification, a dedicated node explains supported conditional branches and their limits. Generation is instructed to use supplied legal grounds; missing legal grounds cannot be replaced by factual assumptions.
+
+In the recorded 12-case, three-repeat evaluation, [A v3](comparison/reports/A_v3.md) passed semantic grading in 36/36 runs and [B v1](comparison/reports/B_v1.md) in 22/36. Both agents use deepseek-flash and the same retrieval tools. B v1 combines existing records with a partial rerun; runtime, case isolation and adapter differences limit direct causal and timing comparisons. These small development-set results do not establish generalization or a zero-hallucination rate.
 
 For the default Windows deployment, install Docker Desktop with Linux containers and Docker Compose, and an NVIDIA GPU with container support. Download `compose.release.yaml` and follow the [Docker Hub deployment guide](docs/dockerhub-release.md), then open [http://127.0.0.1:3000](http://127.0.0.1:3000) and configure the model in Settings. Source builds can use Git and `scripts/start-compose.ps1`. A GLM API key is required for semantic law retrieval and memory embeddings, including when DeepSeek is the chat model.
 
