@@ -1,62 +1,49 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="690" viewBox="0 0 1080 690" role="img" aria-labelledby="title desc">
-<title id="title">Legal Agent: A v3 and B v1</title>
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="850" viewBox="0 0 1000 850" role="img" aria-labelledby="title desc">
+<title id="title">A v3 与 B v1 对照评测</title>
 <desc id="desc">A v3: 36 of 36 semantic passes, required questions in 18 of 18 runs, 30122.92 mean agent tokens and 57.348 seconds. B v1: 22 of 36 semantic passes, required questions in 4 of 18 runs, 56275.53 tokens and 22.045 seconds. B combines existing and follow-up records; timings are descriptive.</desc>
 <metadata>{"A_v3": {"pass_rate": 100.0, "required_asked": 18, "required_total": 18, "score": "36/36", "seconds": 57.348, "tokens": 30122.92}, "B_v1": {"pass_rate": 61.11, "required_asked": 4, "required_total": 18, "score": "22/36", "seconds": 22.045, "tokens": 56275.53}}</metadata>
-<style>text{font-family:"Microsoft YaHei","PingFang SC","Noto Sans CJK SC",Arial,sans-serif;fill:#0f172a}.muted{fill:#64748b}.title{font-size:19px;font-weight:700}.label{font-size:15px;font-weight:600}.value{font-size:17px;font-weight:700}.small{font-size:13px}</style>
-<rect width="1080" height="690" rx="16" fill="#f8fafc"/>
-<text x="32" y="45" font-size="27" font-weight="700">法律 Agent 对照评测</text>
-<text x="32" y="75" class="muted" font-size="15">每组 12 个案件 × 3 轮 | deepseek-flash | 独立模型语义评分</text>
-<circle cx="785" cy="40" r="6" fill="#0f766e"/><text x="800" y="45" font-size="14">A v3</text>
-<circle cx="925" cy="40" r="6" fill="#64748b"/><text x="940" y="45" font-size="14">B v1</text>
-<rect x="32" y="104" width="496" height="218" rx="12" fill="#fff" stroke="#e2e8f0"/>
-<text x="56" y="138" class="title">语义评分通过率</text>
-<text x="56" y="162" class="muted small">评价核心结论，不等于逐项法条引文准确率</text>
-<text x="56" y="201" class="label">A v3</text>
-<rect x="123" y="183" width="290" height="25" rx="4" fill="#f1f5f9"/>
-<rect x="123" y="183" width="290.000" height="25" rx="4" fill="#0f766e"/>
-<text x="504" y="202" text-anchor="end" class="value">100.00%</text>
-<text x="56" y="248" class="label">B v1</text>
-<rect x="123" y="230" width="290" height="25" rx="4" fill="#f1f5f9"/>
-<rect x="123" y="230" width="177.219" height="25" rx="4" fill="#64748b"/>
-<text x="504" y="249" text-anchor="end" class="value">61.11%</text>
-<text x="123" y="297" class="muted small">刻度：0–100%</text>
-<rect x="552" y="104" width="496" height="218" rx="12" fill="#fff" stroke="#e2e8f0"/>
-<text x="576" y="138" class="title">必要追问覆盖</text>
-<text x="576" y="162" class="muted small">必须追问的案次中，实际发起追问的数量</text>
-<text x="576" y="201" class="label">A v3</text>
-<rect x="643" y="183" width="290" height="25" rx="4" fill="#f1f5f9"/>
-<rect x="643" y="183" width="290.000" height="25" rx="4" fill="#0f766e"/>
-<text x="1024" y="202" text-anchor="end" class="value">18 / 18</text>
-<text x="576" y="248" class="label">B v1</text>
-<rect x="643" y="230" width="290" height="25" rx="4" fill="#f1f5f9"/>
-<rect x="643" y="230" width="64.444" height="25" rx="4" fill="#64748b"/>
-<text x="1024" y="249" text-anchor="end" class="value">4 / 18</text>
-<text x="643" y="297" class="muted small">刻度：0–100%</text>
-<rect x="32" y="350" width="496" height="218" rx="12" fill="#fff" stroke="#e2e8f0"/>
-<text x="56" y="384" class="title">每案平均 Agent token</text>
-<text x="56" y="408" class="muted small">仅统计被测 Agent，排除模拟用户与评审</text>
-<text x="56" y="447" class="label">A v3</text>
-<rect x="123" y="429" width="290" height="25" rx="4" fill="#f1f5f9"/>
-<rect x="123" y="429" width="145.594" height="25" rx="4" fill="#0f766e"/>
-<text x="504" y="448" text-anchor="end" class="value">30,122.92</text>
-<text x="56" y="494" class="label">B v1</text>
-<rect x="123" y="476" width="290" height="25" rx="4" fill="#f1f5f9"/>
-<rect x="123" y="476" width="271.998" height="25" rx="4" fill="#64748b"/>
-<text x="504" y="495" text-anchor="end" class="value">56,275.53</text>
-<text x="123" y="543" class="muted small">刻度：0–60,000 token</text>
-<rect x="552" y="350" width="496" height="218" rx="12" fill="#fff" stroke="#e2e8f0"/>
-<text x="576" y="384" class="title">每案平均耗时</text>
-<text x="576" y="408" class="muted small">实测耗时，包含模拟用户补充回复的时间</text>
-<text x="576" y="447" class="label">A v3</text>
-<rect x="643" y="429" width="290" height="25" rx="4" fill="#f1f5f9"/>
-<rect x="643" y="429" width="255.860" height="25" rx="4" fill="#0f766e"/>
-<text x="1024" y="448" text-anchor="end" class="value">57.348 s</text>
-<text x="576" y="494" class="label">B v1</text>
-<rect x="643" y="476" width="290" height="25" rx="4" fill="#f1f5f9"/>
-<rect x="643" y="476" width="98.355" height="25" rx="4" fill="#64748b"/>
-<text x="1024" y="495" text-anchor="end" class="value">22.045 s</text>
-<text x="643" y="543" class="muted small">刻度：0–65 秒</text>
-<text x="32" y="609" font-size="14" class="muted">A v3：完整运行 36 案次；B v1：33 条既有记录与 3 条单案补测记录。</text>
-<text x="32" y="635" font-size="14" class="muted">两组的案件隔离与运行环境存在差异，结果用于描述方案表现，不能单独归因。</text>
-<text x="32" y="661" font-size="14" class="muted">语义通过率不代表泛化能力，也不能证明零法律幻觉。</text>
+<style>text{font-family:"Microsoft YaHei","PingFang SC","Noto Sans CJK SC",Arial,sans-serif;fill:#172033}.heading{font-size:30px;font-weight:700}.metric{font-size:21px;font-weight:600}.label{font-size:16px;fill:#64748b}.value{font-size:21px;font-weight:600}.legend{font-size:17px}</style>
+<rect width="1000" height="850" rx="12" fill="#ffffff"/>
+<text x="52" y="57" class="heading">法律 Agent 对照评测</text>
+<circle cx="59" cy="101" r="6" fill="#0f766e"/><text x="76" y="107" class="legend">A v3 · 固定工作流</text>
+<circle cx="334" cy="101" r="6" fill="#64748b"/><text x="351" y="107" class="legend">B v1 · 无工作流</text>
+<text x="52" y="170" class="metric">语义评分通过率</text>
+<text x="52" y="212" class="label">A v3</text>
+<rect x="135" y="197" width="625" height="18" rx="3" fill="#f1f5f9"/>
+<rect x="135" y="197" width="625.000" height="18" rx="3" fill="#0f766e"/>
+<text x="948" y="213" text-anchor="end" class="value">100.00%</text>
+<text x="52" y="257" class="label">B v1</text>
+<rect x="135" y="242" width="625" height="18" rx="3" fill="#f1f5f9"/>
+<rect x="135" y="242" width="381.938" height="18" rx="3" fill="#64748b"/>
+<text x="948" y="258" text-anchor="end" class="value">61.11%</text>
+<line x1="52" x2="948" y1="302" y2="302" stroke="#edf0f3"/>
+<text x="52" y="340" class="metric">必要追问覆盖</text>
+<text x="52" y="382" class="label">A v3</text>
+<rect x="135" y="367" width="625" height="18" rx="3" fill="#f1f5f9"/>
+<rect x="135" y="367" width="625.000" height="18" rx="3" fill="#0f766e"/>
+<text x="948" y="383" text-anchor="end" class="value">18 / 18</text>
+<text x="52" y="427" class="label">B v1</text>
+<rect x="135" y="412" width="625" height="18" rx="3" fill="#f1f5f9"/>
+<rect x="135" y="412" width="138.889" height="18" rx="3" fill="#64748b"/>
+<text x="948" y="428" text-anchor="end" class="value">4 / 18</text>
+<line x1="52" x2="948" y1="472" y2="472" stroke="#edf0f3"/>
+<text x="52" y="510" class="metric">每案平均 Agent token</text>
+<text x="52" y="552" class="label">A v3</text>
+<rect x="135" y="537" width="625" height="18" rx="3" fill="#f1f5f9"/>
+<rect x="135" y="537" width="313.780" height="18" rx="3" fill="#0f766e"/>
+<text x="948" y="553" text-anchor="end" class="value">30,122.92</text>
+<text x="52" y="597" class="label">B v1</text>
+<rect x="135" y="582" width="625" height="18" rx="3" fill="#f1f5f9"/>
+<rect x="135" y="582" width="586.203" height="18" rx="3" fill="#64748b"/>
+<text x="948" y="598" text-anchor="end" class="value">56,275.53</text>
+<line x1="52" x2="948" y1="642" y2="642" stroke="#edf0f3"/>
+<text x="52" y="680" class="metric">每案平均耗时</text>
+<text x="52" y="722" class="label">A v3</text>
+<rect x="135" y="707" width="625" height="18" rx="3" fill="#f1f5f9"/>
+<rect x="135" y="707" width="551.423" height="18" rx="3" fill="#0f766e"/>
+<text x="948" y="723" text-anchor="end" class="value">57.348 秒</text>
+<text x="52" y="767" class="label">B v1</text>
+<rect x="135" y="752" width="625" height="18" rx="3" fill="#f1f5f9"/>
+<rect x="135" y="752" width="211.971" height="18" rx="3" fill="#64748b"/>
+<text x="948" y="768" text-anchor="end" class="value">22.045 秒</text>
 </svg>
