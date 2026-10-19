@@ -42,7 +42,7 @@ def test_migration_is_repeatable_and_creates_native_types(database_url):
     migrate_database(database_url)
     with psycopg.connect(database_url) as connection:
         assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == (
-            "0001_sessions_logs",
+            "0003_live_run_events",
         )
         columns = dict(connection.execute(
             "SELECT column_name, data_type FROM information_schema.columns "
