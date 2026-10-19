@@ -35,7 +35,7 @@
 
 **执行范围：** A v3 为完整三轮运行；B v1 汇总 33 条既有记录与 3 条单案补测，后续案件未随该单案重新执行，首轮补测还包含独立检索进程的模型加载成本。因此耗时不能视为两组完整连续执行的严格速度对照。
 
-**结果边界：** 这是法律子图与自主工具 Agent 的整体方案对照，两组的案件隔离、模型适配器和运行环境也存在差异。12 个案件已经用于调试，不能据此推断泛化能力，也不能把 100% 语义通过率理解为零法律幻觉或全部法条引文准确。现有评分中 B02 的定作商品确认要求仍待专项复核；第三轮 C04 也有法条编号误引但核心结论判为通过的记录。
+**结果边界：** 这是法律子图与自主工具 Agent 的整体方案对照，两组的案件隔离、模型适配器和运行环境也存在差异。12 个案件已经用于调试，不能据此推断泛化能力，也不能把 100% 语义通过率理解为零法律幻觉或全部法条引文准确。
 
 查看完整问题、实际追问、最终回答及评分理由：[A v3 报告](comparison/reports/A_v3.md) · [B v1 报告](comparison/reports/B_v1.md)。
 
@@ -47,14 +47,14 @@
 
 ### 1. 下载发布版并启动
 
-发布版直接使用 Docker Hub 的三个 `sysoe/chinese-legal-agent*:0.5.1` 镜像，无需安装 Git、Python、Node.js 或在本机构建。
+发布版直接使用 Docker Hub 的三个 `sysoe/chinese-legal-agent*:0.5.2` 镜像，无需安装 Git、Python、Node.js 或在本机构建。
 
 在 PowerShell 中执行：
 
 ```powershell
 New-Item -ItemType Directory -Path chinese-legal-agent -Force | Out-Null
 Set-Location chinese-legal-agent
-Invoke-WebRequest -Uri https://raw.githubusercontent.com/sysoebuilder/chinese-legal-agent/v0.5.1/compose.release.yaml -OutFile compose.release.yaml
+Invoke-WebRequest -Uri https://raw.githubusercontent.com/sysoebuilder/chinese-legal-agent/v0.5.2/compose.release.yaml -OutFile compose.release.yaml
 docker compose -f compose.release.yaml pull
 docker compose -f compose.release.yaml up -d --wait
 ```
@@ -173,7 +173,7 @@ flowchart LR
 
 发布版 `compose.release.yaml` 的项目名为 `chinese-legal-agent`，数据卷名称以 `chinese-legal-agent_` 开头。源码构建使用独立的 `compose.yaml`。
 
-发布版 API 和 Worker 共用 `sysoe/chinese-legal-agent:0.5.1` 镜像，前端使用 `sysoe/chinese-legal-agent-web:0.5.1`，初始化使用 `sysoe/chinese-legal-agent-init:0.5.1`。PostgreSQL、Redis 和 Qdrant 是独立服务。源码构建使用对应的 `:local` 镜像；修改代码后需要重新构建对应镜像并重新创建容器。
+发布版 API 和 Worker 共用 `sysoe/chinese-legal-agent:0.5.2` 镜像，前端使用 `sysoe/chinese-legal-agent-web:0.5.2`，初始化使用 `sysoe/chinese-legal-agent-init:0.5.2`。PostgreSQL、Redis 和 Qdrant 是独立服务。源码构建使用对应的 `:local` 镜像；修改代码后需要重新构建对应镜像并重新创建容器。
 
 当前部署的业务服务全部在容器中运行。Agent 不接入 Windows 终端 MCP，Compose 和启动脚本也不启动宿主机终端服务。详见 [部署说明](docs/run-api.md)。
 
@@ -243,7 +243,7 @@ MCP 地址为 `http://127.0.0.1:8000/mcp`，当前独立法律 MCP 的 HTTP 入�
 - [模型、插件、密钥与权限配置](docs/model-configuration.md)
 - [前端开发说明](frontend/README.md)
 
-版本 **0.5.1** · Python **3.11+** · LangChain / LangGraph · FastAPI / Celery · PostgreSQL / Redis / Qdrant
+版本 **0.5.2** · Python **3.11+** · LangChain / LangGraph · FastAPI / Celery · PostgreSQL / Redis / Qdrant
 
 ## 搜索关键词
 
