@@ -44,3 +44,10 @@ htmlcov/
 node_modules/
 playwright-report/
 test-results/
+
+# Comparison experiments stay local; publish only these two reports.
+/comparison/*
+!/comparison/reports/
+/comparison/reports/*
+!/comparison/reports/A_v3.md
+!/comparison/reports/B_v1.md
